@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 #include <sys/select.h>
-
+#include <sys/stat.h>
 
 /* network interface */
 #include <sys/socket.h>
@@ -52,6 +52,12 @@ typedef struct {
 	/* OUT */
 	int ret;
 } __attribute__((packed)) uhyve_netread_t;
+
+// UHYVE_PORT_NETSTAT
+typedef struct {
+        /* IN */
+        int status
+} __attribute__((packed)) uhyve_netstat_t;
 
 
 /* TODO2: create an array or equal for more then one netif */

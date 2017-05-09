@@ -91,7 +91,7 @@
 #define UHYVE_PORT_NETINFO      0x505
 #define UHYVE_PORT_NETWRITE     0x506
 #define UHYVE_PORT_NETREAD      0x507
-
+#define UHYVE_PORT_NETSTAT	0x508
 /*
 #ifdef __UHYVE_HOST__
 #define UHYVE_GUEST_PTR(T) uint64_t
@@ -655,6 +655,17 @@ static int vcpu_loop(void)
 					uhyve_netread->ret = 0;
 					break;
 				}
+			case UHYVE_PORT_NETSTAT: {
+					unsigned status = *((unsigned*)((size_t)run+run->io.data_offset));
+					uhyve_netstat_t* uhyve_netstat = (uhyve_netstat_t*)(guest_mem + status);
+					char* str = getenv("HERMIT_NETIF");
+					if (str) {
+						uhyve_netstat->status = 1;
+					} else {
+						uhyve_netstat->status = 0;
+					}
+					break;
+			}
 			default:
 				err(1, "KVM: unhandled KVM_EXIT_IO at port 0x%x, direction %d", run->io.port, run->io.direction);
 				break;

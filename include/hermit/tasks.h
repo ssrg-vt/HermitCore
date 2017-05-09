@@ -36,6 +36,7 @@
 #ifndef __TASKS_H__
 #define __TASKS_H__
 
+#include <hermit/stdio.h>
 #include <hermit/stddef.h>
 #include <hermit/tasks_types.h>
 #include <asm/tasks.h>
@@ -251,11 +252,13 @@ int network_shutdown(void);
 void check_ticks(void);
 #endif
 
-
 /** @brief shutdown the whole system
  */
 void shutdown_system(void);
 
+static inline uint64_t get_clock_tick();
+int hermit_net_stat();
+void uhyve_netif_poll();
 
 extern volatile uint32_t go_down;
 static inline void check_workqueues_in_irqhandler(int irq)
@@ -274,8 +277,15 @@ static inline void check_workqueues_in_irqhandler(int irq)
 	}
 }
 
+//int timer_wait(unsigned int ticks);
+
 static inline void check_workqueues(void)
 {
+//	kprintf("[%i] ", get_clock_tick());
+	if (hermit_net_stat()) {
+		uhyve_netif_poll();
+//		timer_wait(100);
+	}
 	// call with invalid interrupt number
 	check_workqueues_in_irqhandler(-1);
 }

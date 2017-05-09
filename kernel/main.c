@@ -58,6 +58,7 @@
 #include <net/mmnif.h>
 #include <net/rtl8139.h>
 #include <net/e1000.h>
+#include <net/uhyve-net.h>
 
 #define HERMIT_PORT	0x494E
 #define HERMIT_MAGIC	0x7E317
@@ -177,10 +178,23 @@ static int init_netifs(void)
 	LOG_INFO("TCP/IP initialized.\n");
 	sys_sem_free(&sem);
 
-	if (is_uhyve())
-		return -ENODEV;
+	if (is_uhyve()) {
+                /* Set network address variables */
+                IP_ADDR4(&gw, 10,0,5,1);
+                IP_ADDR4(&ipaddr, 10,0,5,2);
+                IP_ADDR4(&netmask, 255,255,255,0);
 
-	if (!is_single_kernel())
+		if ((err = netifapi_netif_add(&default_netif, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gw), NULL, uhyve_netif_init, ethernet_input)) != ERR_OK) {
+			LOG_ERROR("Unable to add the uhyve_net network interface: err = %d\n", err);
+			return -ENODEV;
+		}
+		/*tell lqip all initialization is done and we want to set it up */
+		netifapi_netif_set_default(&default_netif);
+		LOG_INFO("set_default\n");
+		netifapi_netif_set_up(&default_netif);
+		LOG_INFO("set_up\n");
+	}
+	else if (!is_single_kernel())
 	{
 		/* Set network address variables */
 		IP_ADDR4(&gw, 192,168,28,1);

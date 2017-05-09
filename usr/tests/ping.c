@@ -25,6 +25,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <unistd.h>
+#include <time.h>
 
 #define ETHERTYPE_IP	0x0800
 #define ETHERTYPE_ARP	0x0806
@@ -32,7 +33,7 @@
 #define PLEN_IPV4	4
 #define WAIT_TIME	1
 #define MAX_WAIT_TIME	1000
-#define PING_LIMIT	50
+#define PING_LIMIT	10
 
 typedef struct {
 	uint8_t target[HLEN_ETHER];
@@ -231,7 +232,7 @@ static void send_garp(void)
 
 static void ping_serve(int verbose, int limit)
 {
-	unsigned long received = 0;
+	unsigned long received = 0, maxtime = 0;
 
 	char *hermit_mac = hermit_net_mac_str();
 
@@ -248,6 +249,7 @@ static void ping_serve(int verbose, int limit)
 	for(;;) {
 		ether_t *p = (ether_t *)&buf;
 		int len = sizeof(buf);
+//		printf("ping.c: len = %i\n", len);
 		int i = 0;
 		int border = MAX_WAIT_TIME/WAIT_TIME;
 		while(hermit_net_read_sync(buf, &len) != 0 && i < border) {
@@ -255,7 +257,11 @@ static void ping_serve(int verbose, int limit)
 			i++;
 		}
 		if (i >= border) {
-//			printf("No packet received\n");
+			printf("No packet received [%i]\n", maxtime);
+			maxtime++;
+			if (maxtime > 3) {
+				break;
+			}
 			continue;
 		}
 		if (memcmp(p->target, macaddr, HLEN_ETHER) && memcmp(p->target, macaddr_brd, HLEN_ETHER))
@@ -273,6 +279,7 @@ static void ping_serve(int verbose, int limit)
 					goto out;
 				if(verbose)
 					printf("Received ping, sending reply\n");
+					kprintf("Received ping, sending reply\n");
 				break;
 			default:
 				goto out;
@@ -301,6 +308,8 @@ int main(int argc, char** argv)
 
 	printf("\n=====================\n");
 	printf("HermitCore ping serve\n");
+	kprintf("\n=====================\n");
+	kprintf("HermitCore ping serve\n");
 
 	if (0) {
 		// TODO1: check arguments to set or unset verbose and limit
@@ -311,6 +320,8 @@ int main(int argc, char** argv)
 
 	printf("SUCCESS!\n");
 	printf("=====================\n");
+	kprintf("SUCCESS!\n");
+	kprintf("=====================\n");
 
 	return 1;
 }

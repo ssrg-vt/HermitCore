@@ -104,7 +104,6 @@ static void timer_handler(struct state *s)
 int timer_wait(unsigned int ticks)
 {
 	uint64_t eticks = per_core(timer_ticks) + ticks;
-
 	task_t* curr_task = per_core(current_task);
 
 	if (curr_task->status == TASK_IDLE)
