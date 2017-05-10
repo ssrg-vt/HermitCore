@@ -799,6 +799,15 @@ int uhyve_init(char *path)
 	kvm_ioctl(vmfd, KVM_CREATE_IRQCHIP, NULL);
 	//kvm_ioctl(vmfd, KVM_SET_BOOT_CPU_ID, 0);
 
+	str = getenv("HERMIT_NETIF");
+	if (str)
+	{
+		//TODO3: strncmp for different network interfaces for example tun/tap device or uhyvetap device
+		char *hermit_netif = str;
+		netfd = uhyve_net_init(guest_mem, hermit_netif);
+	}
+
+
 	return vcpu_init(0);
 }
 
@@ -820,7 +829,7 @@ int uhyve_loop(void)
 	// start threads to create VCPU
 	for(size_t i=1; i<ncores; i++)
 		pthread_create(vcpu_threads+i, NULL, uhyve_thread, (void*) i);
-
+/*
 	str = getenv("HERMIT_NETIF");
 	if (str)
 	{
@@ -828,6 +837,6 @@ int uhyve_loop(void)
 		char *hermit_netif = str;
 		netfd = setup_network(vcpufd, guest_mem, hermit_netif);
 	}
-
+*/
 	return vcpu_loop();
 }

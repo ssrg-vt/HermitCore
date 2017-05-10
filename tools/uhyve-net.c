@@ -157,7 +157,7 @@ int set_mac() {
 	return 0;
 }
 //-------------------------------------- SETUP NETWORK ---------------------------------------------//
-static int setup_network(int vcpufd, uint8_t *mem, char *hermit_netif)
+static int uhyve_net_init(/*int vcpufd,*/ uint8_t *mem, char *hermit_netif)
 {
 	//LOG_INFO("Setting up UHYVE_NET interface");
 	// TODO2: write an while loop for attaching more than one netif, which changes are necessary in uhyve.c?
