@@ -281,11 +281,7 @@ static inline void check_workqueues_in_irqhandler(int irq)
 
 static inline void check_workqueues(void)
 {
-//	kprintf("[%i] ", get_clock_tick());
-	if (hermit_net_stat()) {
-		uhyve_netif_poll();
-//		timer_wait(100);
-	}
+	uhyve_netif_poll();
 	// call with invalid interrupt number
 	check_workqueues_in_irqhandler(-1);
 }

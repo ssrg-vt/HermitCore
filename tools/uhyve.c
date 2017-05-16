@@ -650,7 +650,6 @@ static int vcpu_loop(void)
 						uhyve_netread->ret = -1;
 						break;
 					}
-					printf("len = %i", ret);
 					assert(ret > 0);
 					uhyve_netread->len = ret;
 					uhyve_netread->ret = 0;

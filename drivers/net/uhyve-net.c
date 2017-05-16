@@ -86,11 +86,7 @@ int hermit_net_write_sync(uint8_t *data, int n)
 }
 int hermit_net_stat() {
         volatile uhyve_netstat_t uhyve_netstat;
-	if (uhyve_net_init_ok) {
         outportl(UHYVE_PORT_NETSTAT, (unsigned)virt_to_phys((size_t)&uhyve_netstat));
-	} else {
-		uhyve_netstat.status = 0;
-	}
         return uhyve_netstat.status;
 }
 
@@ -189,7 +185,7 @@ static err_t uhyve_netif_output(struct netif* netif, struct pbuf* p)
 uint64_t last_poll = 0;
 static int polling, cntr = 0;
 void uhyve_netif_poll() {
-	if (polling) {
+	if (!uhyve_net_init_ok || polling) {
 		return;
 	}
 	polling = 1;
