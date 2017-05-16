@@ -86,8 +86,9 @@ int hermit_net_write_sync(uint8_t *data, int n)
 }
 int hermit_net_stat() {
         volatile uhyve_netstat_t uhyve_netstat;
+	if (uhyve_net_init_ok) {
         outportl(UHYVE_PORT_NETSTAT, (unsigned)virt_to_phys((size_t)&uhyve_netstat));
-	if (!uhyve_net_init_ok) {
+	} else {
 		uhyve_netstat.status = 0;
 	}
         return uhyve_netstat.status;
@@ -102,7 +103,7 @@ int hermit_net_read_sync(uint8_t *data, int *n)
 	outportl(UHYVE_PORT_NETREAD, (unsigned)virt_to_phys((size_t)&uhyve_netread));
 
 	*n = uhyve_netread.len;
-	if (uhyve_netread.ret == 0)
+//	if (uhyve_netread.ret == 0)
 //		kprintf("hermit_net_read_sync: len = %i\n", uhyve_netread.len);
 	return uhyve_netread.ret;
 }
@@ -186,7 +187,7 @@ static err_t uhyve_netif_output(struct netif* netif, struct pbuf* p)
 //------------------------------- POLLING ----------------------------------------
 
 uint64_t last_poll = 0;
-static int polling;
+static int polling, cntr = 0;
 void uhyve_netif_poll() {
 	if (polling) {
 		return;
@@ -200,11 +201,11 @@ void uhyve_netif_poll() {
 	struct pbuf *q;
 	uhyve_netif->rx_pos = 0;
 	if(hermit_net_read_sync(uhyve_netif->rx_buf, &len) == 0) {
-		header = *((uint16_t*) (uhyve_netif->rx_buf + uhyve_netif->rx_pos));
-		uhyve_netif->rx_pos = (uhyve_netif->rx_pos + 2) % RX_BUF_LEN;
+		header = *((uint16_t*) (uhyve_netif->rx_buf)); // + uhyve_netif->rx_pos));
+//		uhyve_netif->rx_pos = (uhyve_netif->rx_pos + 2) % RX_BUF_LEN;
 		if( header ) {
-			length = *((uint16_t*) (uhyve_netif->rx_buf + uhyve_netif->rx_pos)) - 4; // copy packet ( but not the CRC)
-//			length = len;
+//			length = *((uint16_t*) (uhyve_netif->rx_buf + 2)) - 4; // + uhyve_netif->rx_pos)) - 4; // copy packet ( but not the CRC)
+			length = len;
 #if ETH_PAD_SIZE
 			length += ETH_PAD_SIZE; /*allow room for Ethernet padding */
 #endif
@@ -213,9 +214,12 @@ void uhyve_netif_poll() {
 #if ETH_PAD_SIZE
 				pbuf_header(p, -ETH_PAD_SIZE); /*drop the padding word */
 #endif
+				uint8_t pos = 0;
 				for (q=p; q!=NULL; q=q->next) {
-					memcpy((uint8_t*) q->payload, uhyve_netif->rx_buf, q->len);
+					memcpy((uint8_t*) q->payload, uhyve_netif->rx_buf + pos, q->len);
+					pos += q->len;
 				}
+				cntr++;
 #if ETH_PAD_SIZE
 				pbuf_header(p, ETH_PAD_SIZE); /*reclaim the padding word */
 #endif
@@ -224,7 +228,7 @@ void uhyve_netif_poll() {
 				mynetif->input(p, mynetif);
 			} else {
 				LOG_ERROR("uhyve_netif_poll: not enough memory!\n");
-				uhyve_netif->rx_pos += (uhyve_netif->rx_pos + length) % RX_BUF_LEN;
+//				uhyve_netif->rx_pos += (uhyve_netif->rx_pos + length) % RX_BUF_LEN;
 				LINK_STATS_INC(link.memerr);
 				LINK_STATS_INC(link.drop);
 			}
