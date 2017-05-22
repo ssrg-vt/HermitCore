@@ -232,70 +232,73 @@ static void send_garp(void)
 
 static void ping_serve(int verbose, int limit)
 {
-	unsigned long received = 0, maxtime = 0;
+	if (hermit_net_stat()) {
 
-	char *hermit_mac = hermit_net_mac_str();
+		unsigned long received = 0, maxtime = 0;
 
-	for (int i = 0; i < HLEN_ETHER; i++) {			// for example first 3 elemts are D7:
-		macaddr[i] = dehex(*hermit_mac++) << 4;		// D = 1101 =>  11010000 = D0 (left shift with 4)
-		macaddr[i] |= dehex(*hermit_mac++);		// 7 =    	00000111 =  7
-		hermit_mac++;					// with |=	11010111 = D7
-	}							// with ++ : is ignored and the next elemts will bestored in i+1
+		char *hermit_mac = hermit_net_mac_str();
 
-	printf("Serving max. %i pings, with MAC: %s\n", limit, hermit_net_mac_str());
-	printf("Sending gratuitous ARP packet.\n");
-	send_garp();
+		for (int i = 0; i < HLEN_ETHER; i++) {			// for example first 3 elemts are D7:
+			macaddr[i] = dehex(*hermit_mac++) << 4;		// D = 1101 =>  11010000 = D0 (left shift with 4)
+			macaddr[i] |= dehex(*hermit_mac++);		// 7 =    	00000111 =  7
+			hermit_mac++;					// with |=	11010111 = D7
+		}							// with ++ : is ignored and the next elemts will bestored in i+1
 
-	for(;;) {
-		ether_t *p = (ether_t *)&buf;
-		int len = sizeof(buf);
-//		printf("ping.c: len = %i\n", len);
-		int i = 0;
-		int border = MAX_WAIT_TIME/WAIT_TIME;
-		while(hermit_net_read_sync(buf, &len) != 0 && i < border) {
-			timer_wait(WAIT_TIME);
-			i++;
-		}
-		if (i >= border) {
-			printf("No packet received [%i]\n", maxtime);
-			maxtime++;
-			if (maxtime > 3) {
+		printf("Serving max. %i pings, with MAC: %s\n", limit, hermit_net_mac_str());
+		printf("Sending gratuitous ARP packet.\n");
+		send_garp();
+
+		for(;;) {
+			ether_t *p = (ether_t *)&buf;
+			int len = sizeof(buf);
+//			printf("ping.c: len = %i\n", len);
+			int i = 0;
+			int border = MAX_WAIT_TIME/WAIT_TIME;
+			while(hermit_net_read_sync(buf, &len) != 0 && i < border) {
+				timer_wait(WAIT_TIME);
+				i++;
+			}
+			if (i >= border) {
+				printf("No packet received [%i]\n", maxtime);
+				maxtime++;
+				if (maxtime > 3) {
+					break;
+				}
+				continue;
+			}
+			if (memcmp(p->target, macaddr, HLEN_ETHER) && memcmp(p->target, macaddr_brd, HLEN_ETHER))
+				continue;
+			int errornum = 0;
+			switch (htons(p->type)) {
+				case ETHERTYPE_ARP:
+					if((errornum = handle_arp(buf)) != 0)
+						goto out;
+					if(verbose)
+						printf("Received arp request, sending reply\n");
+					break;
+				case ETHERTYPE_IP:
+					if((errornum = handle_ip(buf)) != 0)
+						goto out;
+					if(verbose)
+						printf("Received ping, sending reply\n");
+						kprintf("Received ping, sending reply\n");
+					break;
+				default:
+					goto out;
+			}
+			if (hermit_net_write_sync(buf, len) == -1)
+				printf("Write error\n");
+			received++;
+			if (received > limit) {
+				printf("Limit reached, exiting\n");
 				break;
 			}
-			continue;
-		}
-		if (memcmp(p->target, macaddr, HLEN_ETHER) && memcmp(p->target, macaddr_brd, HLEN_ETHER))
-			continue;
-		int errornum = 0;
-		switch (htons(p->type)) {
-			case ETHERTYPE_ARP:
-				if((errornum = handle_arp(buf)) != 0)
-					goto out;
-				if(verbose)
-					printf("Received arp request, sending reply\n");
-				break;
-			case ETHERTYPE_IP:
-				if((errornum = handle_ip(buf)) != 0)
-					goto out;
-				if(verbose)
-					printf("Received ping, sending reply\n");
-					kprintf("Received ping, sending reply\n");
-				break;
-			default:
-				goto out;
-		}
-		if (hermit_net_write_sync(buf, len) == -1)
-			printf("Write error\n");
-		received++;
-		if (received > limit) {
-			printf("Limit reached, exiting\n");
-			break;
-		}
 
-		continue;
+			continue;
 
-		out:
-			printf("Received non-ping or unsupported packet, dropped. ERROR: %i\n", errornum);
+			out:
+				printf("Received non-ping or unsupported packet, dropped. ERROR: %i\n", errornum);
+		}
 	}
 
 }
