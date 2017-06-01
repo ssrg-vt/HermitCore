@@ -70,7 +70,9 @@
 typedef struct {
 	uint8_t target[HLEN_ETHER];
 	uint8_t source[HLEN_ETHER];
-	uint8_t type[2];
+	uint8_t vlan[4];
+	uint8_t length[2];
+	uint8_t payload[8];
 } ether_t;
 
 int hermit_net_write_sync(uint8_t *data, int n)
@@ -197,15 +199,30 @@ void uhyve_netif_poll() {
 	struct pbuf *q;
 	uhyve_netif->rx_pos = 0;
 	if(hermit_net_read_sync(uhyve_netif->rx_buf, &len) == 0) {
-		header = *((uint16_t*) (uhyve_netif->rx_buf)); // + uhyve_netif->rx_pos));
+//		header = *((uint16_t*) (uhyve_netif->rx_buf)); // + uhyve_netif->rx_pos));
+
+//		ether_t *pac = (ether_t *)uhyve_netif->rx_buf;
+//		kprintf ("target: %02x %02x %02x %02x %02x %02x - ", pac->target[0], pac->target[1], pac->target[2], pac->target[3], pac->target[4], pac->target[5]);
+//		kprintf ("source: %02x %02x %02x %02x %02x %02x - ", pac->source[0], pac->source[1], pac->source[2], pac->source[3], pac->source[4], pac->source[5]);
+//		kprintf ("type: %02x %02x %02x %02x - ", pac->vlan[0], pac->vlan[1], pac->vlan[2], pac->vlan[3]);
+//		kprintf ("pac->length: 0x%02x%02x\n", pac->length[0], pac->length[1]);
+//		kprintf ("payload: %02x %02x %02x %02x %02x %02x %02x %02x\n", pac->payload[0], pac->payload[1], pac->payload[2], pac->payload[3], pac->payload[4], pac->payload[5], pac->payload[6], pac->payload[7]);
+
 //		uhyve_netif->rx_pos = (uhyve_netif->rx_pos + 2) % RX_BUF_LEN;
-		if( header ) {
-//			length = *((uint16_t*) (uhyve_netif->rx_buf + 2)) - 4; // + uhyve_netif->rx_pos)) - 4; // copy packet ( but not the CRC)
-			length = len;
+//		if( header ) {
+//			length = *((uint16_t*) (uhyve_netif->rx_buf + 2)); // + uhyve_netif->rx_pos)) - 4; // copy packet ( but not the CRC)
+//			length = (uint16_t) (pac->length[0]);
+//			length = (length << 8) + (uint16_t) (pac->length[1]);
+//			kprintf("length: %d bytes", length);
+//			if (length == 2048) {
+//				length = 28;
+//			}
+//			length += 15;
+//			kprintf(" - len: %d bytes\n", len);
 #if ETH_PAD_SIZE
-			length += ETH_PAD_SIZE; /*allow room for Ethernet padding */
+			len += ETH_PAD_SIZE; /*allow room for Ethernet padding */
 #endif
-			p = pbuf_alloc(PBUF_RAW, length, PBUF_POOL);
+			p = pbuf_alloc(PBUF_RAW, len, PBUF_POOL);
 			if(p) {
 #if ETH_PAD_SIZE
 				pbuf_header(p, -ETH_PAD_SIZE); /*drop the padding word */
@@ -228,7 +245,7 @@ void uhyve_netif_poll() {
 				LINK_STATS_INC(link.memerr);
 				LINK_STATS_INC(link.drop);
 			}
-		}
+//		}
 	}
 	polling = 0;
 }
@@ -285,6 +302,12 @@ err_t uhyve_netif_init (struct netif* netif) {
 	}
 	LWIP_DEBUGF(NETIF_DEBUG, ("\n"));
 	uhyve_netif->ethaddr = (struct eth_addr *)netif->hwaddr;
+
+	if (ETHARP_SUPPORT_VLAN) {
+		kprintf("ETHARP_SUPPORT_VLAN: enabled\n");
+	} else {
+		kprintf("ETHARP_SUPPORT_VLAN: disabled\n");
+	}
 
 	netif->name[0] = 'e';
 	netif->name[1] = 'n';
