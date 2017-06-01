@@ -31,11 +31,8 @@
  */
 
 
-//TODO1: include one file with typedef and ports in netio.c and uhyve-net.c
 #include <hermit/stddef.h>
 #include <hermit/stdio.h>
-//#include <hermit/string.h>
-//#incldue <hermit/processor.h>
 #include <hermit/tasks.h>
 #include <hermit/errno.h>
 #include <hermit/syscall.h>
@@ -47,10 +44,7 @@
 #include <hermit/signal.h>
 #include <hermit/mailbox.h>
 #include <hermit/logging.h>
-//#include <asm/page.h>
 #include <asm/io.h>
-//#include <asm/irq.h>
-//#include <asm/pci.h>
 #include <sys/poll.h>
 #include <lwip/sys.h>
 #include <lwip/netif.h>
@@ -66,14 +60,6 @@
 #define PING_DEBUG 1
 
 #define HLEN_ETHER 6
-
-typedef struct {
-	uint8_t target[HLEN_ETHER];
-	uint8_t source[HLEN_ETHER];
-	uint8_t vlan[4];
-	uint8_t length[2];
-	uint8_t payload[8];
-} ether_t;
 
 int hermit_net_write_sync(uint8_t *data, int n)
 {
@@ -101,8 +87,6 @@ int hermit_net_read_sync(uint8_t *data, int *n)
 	outportl(UHYVE_PORT_NETREAD, (unsigned)virt_to_phys((size_t)&uhyve_netread));
 
 	*n = uhyve_netread.len;
-//	if (uhyve_netread.ret == 0)
-//		kprintf("hermit_net_read_sync: len = %i\n", uhyve_netread.len);
 	return uhyve_netread.ret;
 }
 
@@ -126,8 +110,6 @@ static uint8_t dehex(char c)
         else
                 return 0;
 }
-
-static int counter = 0;
 
 //---------------------------- OUTPUT --------------------------------------------
 
@@ -184,8 +166,8 @@ static err_t uhyve_netif_output(struct netif* netif, struct pbuf* p)
 
 //------------------------------- POLLING ----------------------------------------
 
-uint64_t last_poll = 0;
-static int polling, cntr = 0;
+//uint64_t last_poll = 0;
+static int polling;
 void uhyve_netif_poll() {
 	if (!uhyve_net_init_ok || polling) {
 		return;
@@ -193,59 +175,34 @@ void uhyve_netif_poll() {
 	polling = 1;
 	uhyve_netif_t* uhyve_netif = mynetif->state;
 	int len = RX_BUF_LEN;
-	uint16_t header;
-	uint16_t length, i;
 	struct pbuf *p = NULL;
 	struct pbuf *q;
-	uhyve_netif->rx_pos = 0;
 	if(hermit_net_read_sync(uhyve_netif->rx_buf, &len) == 0) {
-//		header = *((uint16_t*) (uhyve_netif->rx_buf)); // + uhyve_netif->rx_pos));
 
-//		ether_t *pac = (ether_t *)uhyve_netif->rx_buf;
-//		kprintf ("target: %02x %02x %02x %02x %02x %02x - ", pac->target[0], pac->target[1], pac->target[2], pac->target[3], pac->target[4], pac->target[5]);
-//		kprintf ("source: %02x %02x %02x %02x %02x %02x - ", pac->source[0], pac->source[1], pac->source[2], pac->source[3], pac->source[4], pac->source[5]);
-//		kprintf ("type: %02x %02x %02x %02x - ", pac->vlan[0], pac->vlan[1], pac->vlan[2], pac->vlan[3]);
-//		kprintf ("pac->length: 0x%02x%02x\n", pac->length[0], pac->length[1]);
-//		kprintf ("payload: %02x %02x %02x %02x %02x %02x %02x %02x\n", pac->payload[0], pac->payload[1], pac->payload[2], pac->payload[3], pac->payload[4], pac->payload[5], pac->payload[6], pac->payload[7]);
-
-//		uhyve_netif->rx_pos = (uhyve_netif->rx_pos + 2) % RX_BUF_LEN;
-//		if( header ) {
-//			length = *((uint16_t*) (uhyve_netif->rx_buf + 2)); // + uhyve_netif->rx_pos)) - 4; // copy packet ( but not the CRC)
-//			length = (uint16_t) (pac->length[0]);
-//			length = (length << 8) + (uint16_t) (pac->length[1]);
-//			kprintf("length: %d bytes", length);
-//			if (length == 2048) {
-//				length = 28;
-//			}
-//			length += 15;
-//			kprintf(" - len: %d bytes\n", len);
 #if ETH_PAD_SIZE
-			len += ETH_PAD_SIZE; /*allow room for Ethernet padding */
+		len += ETH_PAD_SIZE; /*allow room for Ethernet padding */
 #endif
-			p = pbuf_alloc(PBUF_RAW, len, PBUF_POOL);
-			if(p) {
+		p = pbuf_alloc(PBUF_RAW, len, PBUF_POOL);
+		if(p) {
 #if ETH_PAD_SIZE
-				pbuf_header(p, -ETH_PAD_SIZE); /*drop the padding word */
+			pbuf_header(p, -ETH_PAD_SIZE); /*drop the padding word */
 #endif
-				uint8_t pos = 0;
-				for (q=p; q!=NULL; q=q->next) {
-					memcpy((uint8_t*) q->payload, uhyve_netif->rx_buf + pos, q->len);
-					pos += q->len;
-				}
-				cntr++;
-#if ETH_PAD_SIZE
-				pbuf_header(p, ETH_PAD_SIZE); /*reclaim the padding word */
-#endif
-				LINK_STATS_INC(link.recv);
-				//forward packet to LwIP
-				mynetif->input(p, mynetif);
-			} else {
-				LOG_ERROR("uhyve_netif_poll: not enough memory!\n");
-//				uhyve_netif->rx_pos += (uhyve_netif->rx_pos + length) % RX_BUF_LEN;
-				LINK_STATS_INC(link.memerr);
-				LINK_STATS_INC(link.drop);
+			uint8_t pos = 0;
+			for (q=p; q!=NULL; q=q->next) {
+				memcpy((uint8_t*) q->payload, uhyve_netif->rx_buf + pos, q->len);
+				pos += q->len;
 			}
-//		}
+#if ETH_PAD_SIZE
+			pbuf_header(p, ETH_PAD_SIZE); /*reclaim the padding word */
+#endif
+			LINK_STATS_INC(link.recv);
+			//forward packet to LwIP
+			mynetif->input(p, mynetif);
+		} else {
+			LOG_ERROR("uhyve_netif_poll: not enough memory!\n");
+			LINK_STATS_INC(link.memerr);
+			LINK_STATS_INC(link.drop);
+		}
 	}
 	polling = 0;
 }

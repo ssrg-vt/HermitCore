@@ -89,11 +89,6 @@ typedef struct uhyve_netif {
 	uint32_t tx_complete;
 	uint8_t tx_inuse[TX_BUF_NUM];
 	uint8_t* rx_buf;
-	uint8_t* rx_buf_offset;
-	uint16_t rx_pos;
-
-	//uhyve_netwrite_t tx;
-	//uhyve_netread_t rx;		// add more rx and tx addresses to send/receive in multiple threads ??
 } uhyve_netif_t;
 
 err_t uhyve_netif_init(struct netif* netif);
