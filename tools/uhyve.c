@@ -1257,11 +1257,11 @@ int uhyve_init(char *path)
 
 	kvm_ioctl(vmfd, KVM_CREATE_IRQCHIP, NULL);
 
-	str = getenv("HERMIT_NETIF");
-	if (str)
+	const char* netif_str = getenv("HERMIT_NETIF");
+	if (netif_str)
 	{
 		//TODO3: strncmp for different network interfaces for example tun/tap device or uhyvetap device
-		char *hermit_netif = str;
+		char *hermit_netif = netif_str;
 		netfd = uhyve_net_init(guest_mem, hermit_netif);
 	}
 
