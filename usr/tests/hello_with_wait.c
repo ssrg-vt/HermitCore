@@ -42,7 +42,7 @@ static void test_handler(int s)
 }
 
 static void hello_wait(int ttw) {
-	for(int i = 1; i < 60; i++) {
+	for(int i = 1; i < 600; i++) {
 		printf("waiting...%i\n", i);
 		timer_wait(ttw);
 	}

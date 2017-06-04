@@ -169,7 +169,7 @@ static err_t uhyve_netif_output(struct netif* netif, struct pbuf* p)
 //uint64_t last_poll = 0;
 static int polling;
 void uhyve_netif_poll() {
-	if (!uhyve_net_init_ok || polling) {
+	if (!uhyve_net_init_ok || polling ) {
 		return;
 	}
 	polling = 1;
