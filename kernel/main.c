@@ -163,13 +163,11 @@ static int init_netifs(void)
 
 	if (is_uhyve()) {
 		if(hermit_net_stat()) {
+		LOG_INFO("HermitCore is running on uhyve!\n");
 	                /* Set network address variables */
 	                IP_ADDR4(&gw, 10,0,5,1);
 	                IP_ADDR4(&ipaddr, 10,0,5,2);
 	                IP_ADDR4(&netmask, 255,255,255,0);
-		LOG_INFO("HermitCore is running on uhyve!\n");
-		return -ENODEV;
-	}
 
 			if ((err = netifapi_netif_add(&default_netif, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gw), NULL, uhyve_netif_init, ethernet_input)) != ERR_OK) {
 				LOG_ERROR("Unable to add the uhyve_net network interface: err = %d\n", err);
@@ -177,9 +175,9 @@ static int init_netifs(void)
 			}
 			/*tell lqip all initialization is done and we want to set it up */
 			netifapi_netif_set_default(&default_netif);
-			LOG_INFO("set_default\n");
+//			LOG_INFO("set_default\n");
 			netifapi_netif_set_up(&default_netif);
-			LOG_INFO("set_up\n");
+//			LOG_INFO("set_up\n");
 		}
 	}
 	else if (!is_single_kernel())
