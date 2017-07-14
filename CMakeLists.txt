@@ -14,6 +14,7 @@ add_kernel_module_sources("kernel"		"kernel/*.c")
 add_kernel_module_sources("libkern"		"libkern/*.c")
 add_kernel_module_sources("mm"			"mm/*.c")
 add_kernel_module_sources("drivers"		"drivers/net/*.c")
+add_kernel_module_sources("drivers"		"drivers/blk/*.c")
 
 set(LWIP_SRC lwip/src)
 add_kernel_module_sources("lwip"	"${LWIP_SRC}/api/*.c")

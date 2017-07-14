@@ -64,6 +64,7 @@
 
 #include "uhyve-cpu.h"
 #include "uhyve-net.c"
+#include "uhyve-blk.c"
 #include "uhyve-syscalls.h"
 #include "proxy.h"
 
@@ -150,32 +151,13 @@
 #define UHYVE_PORT_NETWRITE     0x506
 #define UHYVE_PORT_NETREAD      0x507
 #define UHYVE_PORT_NETSTAT	0x508
-/*
-#ifdef __UHYVE_HOST__
-#define UHYVE_GUEST_PTR(T) uint64_t
-#else
-#define UHYVE_GUEST_PTR(T) T
-#endif
 
-#define add_overflow(a,b,r)							\
-	({									\
-	__typeof(a) __a = a;							\
-	__typeof(b) __b = b;							\
-	(__b) < 1 ?								\
-	((__MIN(__typeof(r)) - (__b) <= (__a)) ? __assign(r, __a + __b) : 1) :	\
-	((__MAC(__typeof(r)) - (__b) >= (__a)) ? __assign(r, __a + __b) : 1);	\
-	})
+// Blockports
 
-// Validate that pis in guest physical address room and given sz does not overflow
-#define GUEST_CHECK_PADDR(p, l, sz) \
-	{									\
-		uint64_t __e;							\
-		if ((p >= l || add_overflow(p, sz, __e) || (__e >= 1))		\
-			errx(1, "%s:%d: Invalid guest access: "			\
-				"paddr=0x%" PRIx64 ", sz=%zu",			\
-				__FILE__, __LINE__, p, sz);			\
-	}
-*/
+#define UHYVE_PORT_BLKINFO	0x509
+#define UHYVE_PORT_BLKWRITE	0x50a
+#define UHYVE_PORT_BLKREAD	0x50b
+#define UHYVE_PORT_BLKSTAT	0x50c
 
 #define kvm_ioctl(fd, cmd, arg) ({ \
 	const int ret = ioctl(fd, cmd, arg); \
@@ -198,7 +180,7 @@ static size_t guest_size = 0x20000000ULL;
 static uint64_t elf_entry;
 static pthread_t* vcpu_threads = NULL;
 static int* vcpu_fds = NULL;
-static int kvm = -1, vmfd = -1, netfd = -1;
+static int kvm = -1, vmfd = -1, netfd = -1, diskfd = -1;
 static uint32_t no_checkpoint = 0;
 static pthread_mutex_t kvm_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_barrier_t barrier;
@@ -853,12 +835,14 @@ static int vcpu_loop(void)
 					uhyve_lseek->offset = lseek(uhyve_lseek->fd, uhyve_lseek->offset, uhyve_lseek->whence);
 					break;
 				}
+
 			case UHYVE_PORT_NETINFO: {
 					unsigned data = *((unsigned*)((size_t)run+run->io.data_offset));
 					uhyve_netinfo_t* uhyve_netinfo = (uhyve_netinfo_t*)(guest_mem+data);
 					memcpy(uhyve_netinfo->mac_str, netinfo.mac_str, 18);
 					break;
 				}
+
 			case UHYVE_PORT_NETWRITE: {
 					unsigned data = *((unsigned*)((size_t)run+run->io.data_offset));
 					uhyve_netwrite_t* uhyve_netwrite = (uhyve_netwrite_t*)(guest_mem + data);
@@ -868,6 +852,7 @@ static int vcpu_loop(void)
 					uhyve_netwrite->ret = 0;
 					break;
 				}
+
 			case UHYVE_PORT_NETREAD: {
 					unsigned data = *((unsigned*)((size_t)run+run->io.data_offset));
 					uhyve_netread_t* uhyve_netread = (uhyve_netread_t*)(guest_mem + data);
@@ -882,6 +867,7 @@ static int vcpu_loop(void)
 					uhyve_netread->ret = 0;
 					break;
 				}
+
 			case UHYVE_PORT_NETSTAT: {
 					unsigned status = *((unsigned*)((size_t)run+run->io.data_offset));
 					uhyve_netstat_t* uhyve_netstat = (uhyve_netstat_t*)(guest_mem + status);
@@ -892,7 +878,78 @@ static int vcpu_loop(void)
 						uhyve_netstat->status = 0;
 					}
 					break;
-			}
+				}
+
+			case UHYVE_PORT_BLKINFO: {
+					unsigned data = *((unsigned*)((size_t)run+run->io.data_offset));
+					uhyve_blkinfo_t* uhyve_blkinfo = (uhyve_blkinfo_t*)(guest_mem + data);
+
+					uhyve_blkinfo->sector_size = blkinfo.sector_size;
+					uhyve_blkinfo->num_sectors = blkinfo.num_sectors;
+					uhyve_blkinfo->rw = blkinfo.rw;
+					break;
+				}
+
+			case UHYVE_PORT_BLKWRITE: {
+					unsigned data = *((unsigned*)((size_t)run+run->io.data_offset));
+					uhyve_blkwrite_t* uhyve_blkwrite = (uhyve_blkwrite_t*)(guest_mem + data);
+					ssize_t ret;
+					off_t pos, end;
+
+					assert(uhyve_blkwrite->len <= SSIZE_MAX);
+					if (uhyve_blkwrite->sector >= blkinfo.num_sectors) {
+						uhyve_blkwrite->ret = -1;
+						break;
+					}
+					pos = (off_t)blkinfo.sector_size * (off_t)uhyve_blkwrite->sector;
+					if (add_overflow(pos, uhyve_blkwrite->len, end)
+					    || (end > blkinfo.num_sectors * blkinfo.sector_size)) {
+						uhyve_blkwrite->ret = -2;
+						break;
+					}
+					ret = pwrite(diskfd, guest_mem + (size_t)uhyve_blkwrite->data, uhyve_blkwrite->len, pos);
+					assert(ret == uhyve_blkwrite->len);
+					uhyve_blkwrite->ret = 0;
+					break;
+				}
+
+			case UHYVE_PORT_BLKREAD: {
+					unsigned data = *((unsigned*)((size_t)run+run->io.data_offset));
+					uhyve_blkread_t* uhyve_blkread = (uhyve_blkread_t*)(guest_mem + data);
+					ssize_t ret;
+					off_t pos, end;
+
+					assert(uhyve_blkread->len <= SSIZE_MAX);
+					if (uhyve_blkread->sector >= blkinfo.num_sectors) {
+						uhyve_blkread->ret = -1;
+						break;
+					}
+					pos = (off_t)blkinfo.sector_size * (off_t)uhyve_blkread->sector;
+					if (add_overflow(pos, uhyve_blkread->len, end)
+					    || (end > blkinfo.num_sectors * blkinfo.sector_size)) {
+						uhyve_blkread->ret = -2;
+						break;
+					}
+
+					ret = pread(diskfd, guest_mem + (size_t)uhyve_blkread->data, uhyve_blkread->len, pos);
+					assert(ret == uhyve_blkread->len);
+					uhyve_blkread->ret = 0;
+					break;
+				}
+
+			case UHYVE_PORT_BLKSTAT: {
+                                        unsigned status = *((unsigned*)((size_t)run+run->io.data_offset));
+                                        uhyve_blkstat_t* uhyve_blkstat = (uhyve_blkstat_t*)(guest_mem + status);
+                                        char* str = getenv("HERMIT_NETIF");
+                                        if (str) {
+                                                uhyve_blkstat->status = 1;
+                                        } else {
+                                                uhyve_blkstat->status = 0;
+                                        }
+
+					break;
+				}
+
 			default:
 				err(1, "KVM: unhandled KVM_EXIT_IO at port 0x%x, direction %d\n", run->io.port, run->io.direction);
 				break;
@@ -1261,10 +1318,15 @@ int uhyve_init(char *path)
 	if (netif_str)
 	{
 		//TODO3: strncmp for different network interfaces for example tun/tap device or uhyvetap device
-		char *hermit_netif = netif_str;
-		netfd = uhyve_net_init(guest_mem, hermit_netif);
+//		char *hermit_netif = netif_str;
+		netfd = uhyve_net_init(guest_mem, netif_str);
 	}
 
+	const char* blk_str = getenv("HERMIT_BLK");
+	if (blk_str)
+	{
+		diskfd = uhyve_blk_init(guest_mem, blk_str);
+	}
 
 #ifdef KVM_CAP_X2APIC_API
 	// enable x2APIC support
