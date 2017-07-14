@@ -457,7 +457,8 @@ int main(int argc, char** argv)
 
 	addr_local.s_addr = INADDR_ANY;
 	//addr_server.s_addr = inet_addr("192.168.28.254");
-	addr_server.s_addr = inet_addr("192.168.28.1");
+//	addr_server.s_addr = inet_addr("192.168.28.1");
+	addr_server.s_addr = inet_addr("10.0.5.2");
 
 	err = TCPServer();
 

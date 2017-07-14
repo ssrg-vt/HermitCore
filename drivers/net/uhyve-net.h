@@ -1,6 +1,8 @@
 /* 
  * Copyright 2010 Stefan Lankes, Chair for Operating Systems,
  *                               RWTH Aachen University
+ * Author(s): Stefan Lankes <slankes@eonerc.rwth-aachen.de>
+ *            Tim van de Kamp <tim.van.de.kamp@rwth-aachen.de> *
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:

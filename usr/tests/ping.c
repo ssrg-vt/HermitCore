@@ -1,22 +1,31 @@
-/* 
- * Copyright (c) 2015-2017 Contributors as noted in the AUTHORS file
- *
- * This file is part of Solo5, a unikernel base layer.
- *
- * Permission to use, copy, modify, and/or distribute this software
- * for any purpose with or without fee is hereby granted, provided
- * that the above copyright notice and this permission notice appear
- * in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR
- * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
- * OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
- * NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
- * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
+/* Copyright (c) 2017, RWTH Aachen University
+* Author(s): Stefan Lankes <slankes@eonerc.rwth-aachen.de>
+*            Tim van de Kamp <tim.van.de.kamp@rwth-aachen.de>
+*
+* Permission to use, copy, modify, and/or distribute this software
+* for any purpose with or without fee is hereby granted, provided
+* that the above copyright notice and this permission notice appear
+* in all copies.
+*
+* THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+* WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+* AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR
+* CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+* OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+* NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+* CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+*/
+
+/* We used several existing projects as guides
+* kvmtest.c: http://lwn.net/Articles/658512/
+* lkvm: http://github.com/clearlinux/kvmtool
+*/
+
+/*
+* 15.1.2017: extend original version (https://github.com/Solo5/solo5)
+*            for HermitCore
+*/
 
 #include <stdint.h>
 #include <stdio.h>
@@ -281,7 +290,6 @@ static void ping_serve(int verbose, int limit)
 						goto out;
 					if(verbose)
 						printf("Received ping, sending reply\n");
-						kprintf("Received ping, sending reply\n");
 					break;
 				default:
 					goto out;
@@ -313,11 +321,6 @@ int main(int argc, char** argv)
 	printf("HermitCore ping serve\n");
 	kprintf("\n=====================\n");
 	kprintf("HermitCore ping serve\n");
-
-	if (0) {
-		// TODO1: check arguments to set or unset verbose and limit
-		// first wie will work with predefined verbose and limit
-	}
 
 	ping_serve(verbose, limit);
 

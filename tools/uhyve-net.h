@@ -56,7 +56,7 @@ typedef struct {
 // UHYVE_PORT_NETSTAT
 typedef struct {
         /* IN */
-        int status
+        int status;
 } __attribute__((packed)) uhyve_netstat_t;
 
 

@@ -97,7 +97,6 @@ int attach_linux_tap(const char *dev) {
 		errno = ENODEV;
 		return -1;
 	}
-	printf("UHYVE is succesfully connected with %s\n", dev);
 	return fd;
 }
 
@@ -146,48 +145,28 @@ int set_mac() {
 		guest_mac[0] &= 0xfe;	// creats a random MAC-address in the locally administered
 		guest_mac[0] |= 0x02;	// address range which can be used without conflict with other public devices
 		// save the MAC address in the netinfo
-		// TODO2: save the MAC-address in the netinfo array for more netifs
 		snprintf(netinfo.mac_str, sizeof(netinfo.mac_str),
 			 "%02x:%02x:%02x:%02x:%02x:%02x",
 	                 guest_mac[0], guest_mac[1], guest_mac[2],
 			 guest_mac[3], guest_mac[4], guest_mac[5]);
-		// TODO4: overwrite MAC-address, if MAC-address is given as argument or chechk before random MAC-address is generated
 	}
-	printf("MAC-address: %s\n", netinfo.mac_str);
 	return 0;
 }
 //-------------------------------------- SETUP NETWORK ---------------------------------------------//
 static int uhyve_net_init(/*int vcpufd,*/ uint8_t *mem, char *hermit_netif)
 {
-	//LOG_INFO("Setting up UHYVE_NET interface");
-	// TODO2: write an while loop for attaching more than one netif, which changes are necessary in uhyve.c?
-	//	  how can we get more devices via HERMIT_NETIF? while loop in uhyve.c, which calls setup_network
-	//	  for each netif, so we have not to change anything in this function.
 	netif = hermit_netif;
 
-        // TODO3: strncmp for different network interfaces for example tun/tap device or uhyvetap device
-	// useful if? setup network is only called is HERMTI_NETIF is set
-	if (netif == NULL) {
-		err(1, "ERROR: no netif defined\n");
-		return -1;
-	}
+//	if (netif == NULL) {
+//		err(1, "ERROR: no netif defined\n");
+//		return -1;
+//	}
 	// attaching netif
-	// TODO2: write an while loop for attaching more than one netif (necessary? see first Point of TODO2)
-	// We compare only 9 chars of the string, so we can give the interfaces names like uhyve_net0
-	// So we can create more than one interface
-	if (strncmp("uhyve_net", netif, 9)) {
-		//LOG_INFO("Attaching to host tap device %s (needs existing tap device)", netif);
-		netfd = attach_linux_tap(netif);
-	} else {
-		// TODO5: write a uhyve_net function, which does not need sudo rights (tap)
-		//LOG_INFO("Attaching to uhyve_tap %s", netif);
-		printf("netfd = attach_uhyve_net(netif);");
-	}
+	netfd = attach_linux_tap(netif);
 	if (netfd < 0) {
 		err(1, "Could not attach interface: %s\n", netif);
 		exit(1);
 	}
 	set_mac();
-	//LOG_INFO("UHYVE_NET has MAC: %s", netinfo.mac_str);
 	return netfd;
 }
