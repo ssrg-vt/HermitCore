@@ -60,7 +60,6 @@
 #include <net/rtl8139.h>
 #include <net/e1000.h>
 #include <net/uhyve-net.h>
-#include <net/vioif.h>
 
 #define HERMIT_PORT	0x494E
 #define HERMIT_MAGIC	0x7E317
@@ -100,6 +99,20 @@ islelock_t* rcce_lock = NULL;
 rcce_mpb_t* rcce_mpb = NULL;
 
 extern void signal_init();
+
+#if 0
+static int foo(void* arg)
+{
+	int i;
+
+	for(i=0; i<5; i++) {
+		LOG_INFO("hello from %s\n", (char*) arg);
+		sleep(1);
+	}
+
+	return 0;
+}
+#endif
 
 static int hermit_init(void)
 {
@@ -163,7 +176,6 @@ static int init_netifs(void)
 
 	if (is_uhyve()) {
 		if(hermit_net_stat()) {
-		LOG_INFO("HermitCore is running on uhyve!\n");
 	                /* Set network address variables */
 	                IP_ADDR4(&gw, 10,0,5,1);
 	                IP_ADDR4(&ipaddr, 10,0,5,2);
@@ -175,15 +187,13 @@ static int init_netifs(void)
 			}
 			/*tell lqip all initialization is done and we want to set it up */
 			netifapi_netif_set_default(&default_netif);
-//			LOG_INFO("set_default\n");
+			LOG_INFO("set_default\n");
 			netifapi_netif_set_up(&default_netif);
-//			LOG_INFO("set_up\n");
+			LOG_INFO("set_up\n");
 		}
 	}
 	else if (!is_single_kernel())
 	{
-		LOG_INFO("HermitCore is running side-by-side to Linux!\n");
-
 		/* Set network address variables */
 		IP_ADDR4(&gw, 192,168,28,1);
 		IP_ADDR4(&ipaddr, 192,168,28,isle+2);
@@ -196,11 +206,16 @@ static int init_netifs(void)
 		 *  - gw : the gateway wicht should be used
 		 *  - mmnif_init : the initialization which has to be done in order to use our interface
 		 *  - ip_input : tells him that he should use ip_input
-		 *
+		 */
+#if LWIP_TCPIP_CORE_LOCKING_INPUT
+		if ((err = netifapi_netif_add(&default_netif, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gw), NULL, mmnif_init, ip_input)) != ERR_OK)
+#else
+		/*
 		 * Note: Our drivers guarantee that the input function will be called in the context of the tcpip thread.
 		 * => Therefore, we are able to use ip_input instead of tcpip_input
 		 */
 		if ((err = netifapi_netif_add(&default_netif, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gw), NULL, mmnif_init, ip_input)) != ERR_OK)
+#endif
 		{
 			LOG_ERROR("Unable to add the intra network interface: err = %d\n", err);
 			return -ENODEV;
@@ -217,8 +232,6 @@ static int init_netifs(void)
 
 		/* Note: Our drivers guarantee that the input function will be called in the context of the tcpip thread.
 		 * => Therefore, we are able to use ethernet_input instead of tcpip_input */
-		if ((err = netifapi_netif_add(&default_netif, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gw), NULL, vioif_init, ethernet_input)) == ERR_OK)
-			goto success;
 		if ((err = netifapi_netif_add(&default_netif, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gw), NULL, rtl8139if_init, ethernet_input)) == ERR_OK)
 			goto success;
 		if ((err = netifapi_netif_add(&default_netif, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gw), NULL, e1000if_init, ethernet_input)) == ERR_OK)
@@ -295,6 +308,8 @@ int smp_main(void)
 	while(atomic_int32_read(&cpu_online) < atomic_int32_read(&possible_cpus))
 		PAUSE;
 
+	//create_kernel_task(NULL, foo, "foo2", NORMAL_PRIO);
+
 	while(1) {
 		check_workqueues();
 		wait_for_task();
@@ -325,6 +340,43 @@ static int init_rcce(void)
 
 	return 0;
 }
+
+#if 0
+// some stress tests
+static void lock_test(void)
+{
+	uint64_t start, end;
+	int i;
+	static spinlock_t _lock = SPINLOCK_INIT;
+	static sem_t _sem = SEM_INIT(1);
+
+	start = rdtsc();
+
+	for(i=0; i<10000; i++)
+	{
+		spinlock_lock(&_lock);
+		NOP;
+		spinlock_unlock(&_lock);
+	}
+
+	end = rdtsc();
+
+	LOG_INFO("locks %lld (iterations %d)\n", end-start, i);
+
+	start = rdtsc();
+
+	for(i=0; i<10000; i++)
+	{
+		sem_wait(&_sem, 0);
+		NOP;
+		sem_post(&_sem);
+	}
+
+	end = rdtsc();
+
+	LOG_INFO("sem %lld (iterations %d)\n", end-start, i);
+}
+#endif
 
 int libc_start(int argc, char** argv, char** env);
 
@@ -364,6 +416,9 @@ static int initd(void* arg)
 	// property of the first page
 	vma_free(curr_task->heap->start, curr_task->heap->start+PAGE_SIZE);
 	vma_add(curr_task->heap->start, curr_task->heap->start+PAGE_SIZE, VMA_HEAP|VMA_USER);
+
+	//create_kernel_task(NULL, foo, "foo1", NORMAL_PRIO);
+	//create_kernel_task(NULL, foo, "foo2", NORMAL_PRIO);
 
 	// initialize network
 	err = init_netifs();
