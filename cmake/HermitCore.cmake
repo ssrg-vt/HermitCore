@@ -71,6 +71,7 @@ endif()
 set(HERMIT_KERNEL_INCLUDES
     ${CMAKE_BINARY_DIR}/include
     ${HERMIT_ROOT}/include
+    ${HERMIT_ROOT}/fs
     ${HERMIT_ROOT}/arch/${HERMIT_ARCH}/include
     ${HERMIT_ROOT}/lwip/src/include
     ${HERMIT_ROOT}/drivers)

@@ -78,12 +78,22 @@ int main(int argc, char** argv) {
 	/* Write and read/check one tenth of the disk. */
 	nsectors = hermit_blk_sectors();
 	printf(".");
+	printf("\n\n|");
+
+//	int p = 0, j = 1;
 	for (i = 0; i < nsectors; i += 10) {
 		if ((err = check_sector_write(i)) < 0) {
 			printf("check_sector_write() failed in sector %i : error %i\n", i, err);
 			return -1;
 		}
+/*		p =  (i*100 / nsectors);
+		if (p > 2*j) {
+			printf(".");
+			j++; 
+		}*/
+
 	}
+	printf("|\n\n");
 	/* Check edge case: read/write of last sector on the device. */
 	printf(".");
 	if (hermit_blk_write_sync(nsectors - 1, wbuf, SECTOR_SIZE ) != 0) {

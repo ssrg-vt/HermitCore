@@ -246,7 +246,6 @@ void check_ticks(void);
  */
 void shutdown_system(void);
 
-static inline uint64_t get_clock_tick();
 int hermit_net_stat();
 void uhyve_netif_poll();
 

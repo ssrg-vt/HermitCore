@@ -48,7 +48,7 @@ static int uhyve_blk_init(/*int vcpufd,*/ uint8_t *mem, char *hermit_blk)
 	if (diskfd == -1)
 		err(1, "Could not open disk: %s", blk);
 
-	blkinfo.sector_size = 512;
+	blkinfo.sector_size = 1024;
 	blkinfo.num_sectors = lseek(diskfd, 0, SEEK_END) / 512;
 	blkinfo.rw = 1;
 	printf("BLK device attached with %i sectors and sector_size %i bytes\n", blkinfo.num_sectors, blkinfo.sector_size);

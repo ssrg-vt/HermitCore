@@ -940,9 +940,13 @@ static int vcpu_loop(void)
 			case UHYVE_PORT_BLKSTAT: {
                                         unsigned status = *((unsigned*)((size_t)run+run->io.data_offset));
                                         uhyve_blkstat_t* uhyve_blkstat = (uhyve_blkstat_t*)(guest_mem + status);
-                                        char* str = getenv("HERMIT_NETIF");
+                                        char* str = getenv("HERMIT_BLK");
                                         if (str) {
                                                 uhyve_blkstat->status = 1;
+						char* format = getenv("HERMIT_BLK_FORMAT");
+						if (!strncmp(format, "1", 1)) {
+							uhyve_blkstat->status++;
+						}
                                         } else {
                                                 uhyve_blkstat->status = 0;
                                         }

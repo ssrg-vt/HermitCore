@@ -174,6 +174,8 @@ static int init_netifs(void)
 	LOG_INFO("TCP/IP initialized.\n");
 	sys_sem_free(&sem);
 
+
+
 	if (is_uhyve()) {
 		if(hermit_net_stat()) {
 	                /* Set network address variables */
@@ -292,6 +294,14 @@ int network_shutdown(void)
 	//stats_display();
 
 	return 0;
+}
+
+int init_blkds() {
+
+	
+	if( is_uhyve() ) {
+		initblkd_init();
+	}
 }
 
 #if MAX_CORES > 1
@@ -607,7 +617,7 @@ int hermit_main(void)
 		LOG_INFO("Kernel cmdline: %s\n", (char*) (size_t) mb_info->cmdline);
 	if (hbmem_base)
 		LOG_INFO("Found high bandwidth memory at 0x%zx (size 0x%zx)\n", hbmem_base, hbmem_size);
-
+	init_blkds();
 #if 0
 	print_pci_adapters();
 #endif
@@ -623,7 +633,13 @@ int hermit_main(void)
 	print_status();
 	//vma_dump();
 
+	// initialize block devices
+
+
 	create_kernel_task_on_core(NULL, initd, NULL, NORMAL_PRIO, boot_processor);
+
+
+
 
 	while(1) {
 		check_workqueues();
