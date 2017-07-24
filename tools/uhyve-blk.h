@@ -45,6 +45,8 @@
     ((__MAX(__typeof(r)) - (__b) >= (__a)) ? __assign(r, __a + __b) : 1);      \
 })
 
+#define HERMIT_BLK_BS 512
+
 static char *blk;
 static int diskfd;
 

@@ -48,6 +48,10 @@ static ssize_t initblkd_read(fildes_t* file, uint8_t* buffer, size_t size)
 
 	uint32_t i, pos = 0, found = 0, data_read = 0;
 	off_t offset = 0;
+	size_t tmp_sector = 0, new_sector = 0;
+	int ns = 0;
+	uint8_t* sector_buffer;
+	sector_buffer = (uint8_t*) kmalloc(sector_size);
 	block_list_t* blist = &node->block_list;
 	uint8_t data[sector_size]; 
 	memset(data, 0x00, sector_size);
@@ -74,8 +78,13 @@ static ssize_t initblkd_read(fildes_t* file, uint8_t* buffer, size_t size)
 			}
 		}
 
-		blist = blist->next;
-	} while(blist && !data_read);
+		if (!blist->end) {
+                hermit_blk_read_sync(blist->next_sector, sector_buffer, &sector_size);
+                blist = sector_buffer + sizeof(block_list_t) * blist->next;
+		} else {
+			break;
+		}
+	} while(!data_read);
 
 	/*
 	 * If the data block is not large engough,
@@ -108,6 +117,10 @@ static ssize_t initblkd_emu_readdir(fildes_t* file, uint8_t* buffer, size_t size
         dir_block_t* tmp_db;
         tmp_db = (dir_block_t*) kmalloc(sizeof(dir_block_t));
         dirent_t dirent;
+	size_t tmp_sector = 0, new_sector = 0;
+	int ns = 0;
+	uint8_t* sector_buffer;
+	sector_buffer = (uint8_t*) kmalloc(sector_size);
 	block_list_t* blist = &node->block_list;
 
 	do {
@@ -133,17 +146,26 @@ static ssize_t initblkd_emu_readdir(fildes_t* file, uint8_t* buffer, size_t size
 			}
 		}
 
-		blist = blist->next;
-	} while(blist);
+		if (!blist->end) {
+                hermit_blk_read_sync(blist->next_sector, sector_buffer, &sector_size);
+                blist = sector_buffer + sizeof(block_list_t) * blist->next;
+		} else {
+			break;
+		}
+	} while(1);
 
 	return -EINVAL;
 }
 
 static ssize_t initblkd_write(fildes_t* file, uint8_t* buffer, size_t size)
 {
-	uint32_t i, pos = 0, found = 0, data_writen = 0;
+	uint32_t i, pos = 0, found = 0, data_writen = 0, tmp_next = 0;
 	off_t offset = 0;
 	vfs_node_t* node = file->node;
+	size_t tmp_sector = 0, new_sector = 0;
+	int ns = 0;
+	uint8_t* sector_buffer;
+	sector_buffer = (uint8_t*) kmalloc(sector_size);
 	block_list_t* blist = &node->block_list;
 
 	if (file->flags & O_RDONLY)
@@ -173,9 +195,21 @@ static ssize_t initblkd_write(fildes_t* file, uint8_t* buffer, size_t size)
 				memcpy(tmp_data_block + offset, buffer, size);
                                 blist->data[i] = initblkd_find_sector();
                                 initblkd_set_sector(blist->data[i], 1);
+				if (blist->sector) {
+					if (i == MAX_DATABLOCKS -1) {
+						blist->next++;
+						if (sector_size == (blist->next + 1) * sizeof(block_list_t) ||
+						    sector_size < (blist->next + 1) * sizeof(block_list_t)) {
+							blist->next_sector = 0;
+							blist->next = 0;
+						}
+					}
+					hermit_blk_write_sync(blist->sector, sector_buffer, sector_size);
+				}
                                 hermit_blk_write_sync(blist->data[i], tmp_data_block, sector_size);
 				hermit_blk_write_sync(node->sector, node, size_vn);
 				data_writen = 1;
+				goto out;
 			}
 			else if (blist->data[i]) {
 				found++;
@@ -185,18 +219,54 @@ static ssize_t initblkd_write(fildes_t* file, uint8_t* buffer, size_t size)
 					hermit_blk_write_sync(blist->data[i], tmp_data_block, sector_size);
 					hermit_blk_write_sync(node->sector, node, size_vn);
 					data_writen = 1;
+					goto out;
 				}
 			}
 		}
-
-		if (!blist->next) {
-			blist->next = (block_list_t*) kmalloc(sizeof(block_list_t));
-			if (blist->next) {
-				memset(blist->next, 0x00, sizeof(block_list_t));
+		/* if all blocks are reserved, we have  to allocate a new one */
+		if (!blist->next_sector) {
+			blist->end = 0;
+			new_sector = initblkd_find_sector();
+		        initblkd_set_sector(new_sector, 1);
+			blist->next_sector = new_sector;
+			if (tmp_sector) {
+				hermit_blk_write_sync(tmp_sector, sector_buffer, sector_size);
+			} else {
+				hermit_blk_write_sync(node->sector, node, size_vn);
 			}
+			memset(sector_buffer, 0x00, sector_size);
+		} else {
+			hermit_blk_read_sync(blist->next_sector, sector_buffer, &sector_size);
+			tmp_sector = blist->next_sector;
+			tmp_next = blist->next;
+
 		}
-		blist = blist->next;
+		block_list_t* old_bl = blist;
+		blist = sector_buffer + sizeof(block_list_t) * blist->next;
+		if (blist->data[0] && !new_sector) {
+			continue;
+		}
+		old_bl->end = 0;
+		block_list_t* new_bl;
+		new_bl = (block_list_t*) kmalloc(sizeof(block_list_t));
+		memset(new_bl, 0x00, sizeof(block_list_t));
+		if (new_sector) {
+			new_bl->sector = new_sector;
+			new_bl->next_sector = new_sector;
+			new_bl->next = 0;
+			new_bl->end = 1;
+		} else { 
+			new_bl->sector = tmp_sector;
+			new_bl->next_sector = tmp_sector;
+			new_bl->next = tmp_next;
+			new_bl->end = 1;
+		}
+		memcpy(blist, new_bl, sizeof(block_list_t));
+		kfree(new_bl);
+		tmp_sector = blist->next_sector;
+
 	} while(blist && !data_writen);
+out:
 	kfree(tmp_data_block);
 
 	/* you may have to increase nodesize */
@@ -213,7 +283,6 @@ static ssize_t initblkd_write(fildes_t* file, uint8_t* buffer, size_t size)
 }
 
 static int initblkd_close(fildes_t* file) {
-//	file->node = NULL;
 	file->flags = 0;
 	file->offset = 0;
 }
@@ -222,43 +291,52 @@ static int initblkd_close(fildes_t* file) {
 static int initblkd_open(fildes_t* file, const char* name)
 {
 	if (file->node->type == FS_FILE) {
-		file->flags |= file->node->mask;
 		if ((file->flags & O_CREAT) && (file->flags & O_EXCL))  /// wo wird das flag O_EXCL gesetzt?
 			return -EEXIST;
 
 		/* in the case of O_TRUNC kfree all the nodes */
 		if (file->flags & O_TRUNC) {
 			uint32_t i;
-			char* data = NULL;
 			block_list_t* blist = &file->node->block_list;
 			block_list_t* lastblist = NULL;
+			uint8_t* tmp_sector;
+			tmp_sector = (uint8_t*) kmalloc(sector_size);
 
 			/* the first blist pointer have do remain valid. */
-			for(i=0; i<MAX_DATABLOCKS && !data; i++) {
+			for(i=0; i<MAX_DATABLOCKS; i++) {
 				if (blist->data[i]) {
 					initblkd_set_sector(blist->data[i], 0);
+					kprintf("%i, ", blist->data[i]);
 					blist->data[i] = 0;
 				}
 			}
-			if (blist->next) {
-				lastblist = blist;
-				blist = blist->next;
-				lastblist->next = NULL;
 
-				/* kfree all other blist pointers */
+			if (!blist->end) {
+				lastblist = blist;
+				hermit_blk_read_sync(blist->next_sector, tmp_sector, &sector_size);
+				blist =  tmp_sector + sizeof(block_list_t) * blist->next;
+				kprintf("blist = %i\n", blist);
+				lastblist->next = 0;
+				lastblist->next_sector = 0;
+				lastblist->sector = 0,
+				lastblist->end = 1;
 				do {
-					for(i=0; i<MAX_DATABLOCKS && !data; i++) {
+					for(i=0; i<MAX_DATABLOCKS; i++) {
 						if (blist->data[i]) {
-							kfree(blist->data[i]);
+							initblkd_set_sector(blist->data[i], 0);
+							kprintf("%i, ", blist->data[i]);
+							blist->data[i] = 0;
 						}
 					}
-					lastblist = blist;
-					blist = blist->next;
-					kfree(lastblist);
-				} while(blist);
+					if(blist->end) {
+						break;
+					}
+					hermit_blk_read_sync(blist->next_sector, tmp_sector, &sector_size);
+					blist = tmp_sector + sizeof(block_list_t) * blist->next;
+				} while(1);
 			}
-
 			/* reset the block_size */
+			hermit_blk_write_sync(file->node->sector, file->node, size_vn);
 			file->node->block_size = 0;
 		}
 	}
@@ -271,12 +349,16 @@ static int initblkd_open(fildes_t* file, const char* name)
 		if (!(file->flags & O_CREAT)) 
 			return -ENOENT;
 		file->flags &= O_EXCL;
-		uint32_t i, j;
+		uint32_t i, j, tmp_next = 0;
 		block_list_t* blist = NULL;
 		/* CREATE FILE */
 		vfs_node_t* new_node = kmalloc(sizeof(vfs_node_t));
 		if (BUILTIN_EXPECT(!new_node, 0))
 			return -EINVAL;
+		size_t tmp_sector = 0, new_sector = 0;
+		int ns = 0;
+		uint8_t* sector_buffer;
+		sector_buffer = (uint8_t*) kmalloc(sector_size);
 
 		blist = &file->node->block_list;
 	        dir_block_t* tmp_db;
@@ -319,6 +401,17 @@ static int initblkd_open(fildes_t* file, const char* name)
 					if (!tmp_db->entries[j].vfs_node) {
 						tmp_db->entries[j].vfs_node = new_node->sector;
 						int wr = strncpy(tmp_db->entries[j].name, (char*) name, MAX_FNAME);
+						if (blist->sector) {
+							if (j == max_direntries -1 && i == MAX_DATABLOCKS -1) {
+								blist->next++;
+								if (sector_size == (blist->next + 1) * sizeof(block_list_t) ||
+								    sector_size < (blist->next + 1) * sizeof(block_list_t)) {
+									blist->next_sector = 0;
+									blist->next = 0;
+								}
+							}
+							hermit_blk_write_sync(blist->sector, sector_buffer, sector_size);
+						}
 						hermit_blk_write_sync(blist->data[i], tmp_db, size_db);
 						kfree(tmp_db);
 
@@ -326,14 +419,45 @@ static int initblkd_open(fildes_t* file, const char* name)
 					}
 				}
  			}
-			 /* if all blocks are reserved, we have  to allocate a new one */
-			if (!blist->next) {
-				blist->next = (block_list_t*) kmalloc(sizeof(block_list_t));
-				if (blist->next)
-					memset(blist->next, 0x00, sizeof(block_list_t));
+		/* if all blocks are reserved, we have  to allocate a new one */
+		if (!blist->next_sector) {
+			blist->end = 0;
+			new_sector = initblkd_find_sector();
+		        initblkd_set_sector(new_sector, 1);
+			blist->next_sector = new_sector;
+			if (tmp_sector) {
+				hermit_blk_write_sync(tmp_sector, sector_buffer, sector_size);
 			}
+			memset(sector_buffer, 0x00, sector_size);
+		} else {
+			hermit_blk_read_sync(blist->next_sector, sector_buffer, &sector_size);
+			tmp_sector = blist->next_sector;
+			tmp_next = blist->next;
 
-			blist = blist->next;
+		}
+		block_list_t* old_bl = blist;
+		blist = sector_buffer + sizeof(block_list_t) * blist->next;
+		if (blist->data[0] && !new_sector) {
+			continue;
+		}
+		old_bl->end = 0;
+		block_list_t* new_bl;
+		new_bl = (block_list_t*) kmalloc(sizeof(block_list_t));
+		memset(new_bl, 0x00, sizeof(block_list_t));
+		if (new_sector) {
+			new_bl->sector = new_sector;
+			new_bl->next_sector = new_sector;
+			new_bl->next = 0;
+			new_bl->end = 1;
+		} else { 
+			new_bl->sector = tmp_sector;
+			new_bl->next_sector = tmp_sector;
+			new_bl->next = tmp_next;
+			new_bl->end = 1;
+		}
+		memcpy(blist, new_bl, sizeof(block_list_t));
+		kfree(new_bl);
+		tmp_sector = blist->next_sector;
 		} while(blist);
 
 exit_create_file:
@@ -347,15 +471,17 @@ exit_create_file:
 
 static dirent_t initblkd_readdir(vfs_node_t* node, uint32_t index)
 {
-	uint32_t i, j, count;
+	uint32_t i, j, count = 0;
         int size_db = sizeof(dir_block_t);
         dir_block_t* tmp_db;
         tmp_db = (dir_block_t*) kmalloc(sizeof(dir_block_t));
+	uint8_t* sector_buffer;
+        sector_buffer = (uint8_t*) kmalloc(sector_size);
 	dirent_t dirent;
 	block_list_t* blist = &node->block_list;
-
+	int counter = 0;
 	do {
-		for(i=0,count=0; i<MAX_DATABLOCKS; i++) {
+		for(i=0; i<MAX_DATABLOCKS; i++) {
 			dirent.vfs_node = 0;
 			if(blist->data[i]) {
 				hermit_blk_read_sync(blist->data[i], tmp_db, &size_db);
@@ -371,22 +497,30 @@ static dirent_t initblkd_readdir(vfs_node_t* node, uint32_t index)
 				}
 			}
 		}
-
-		blist = blist->next;
-	} while(blist);
+		if (!blist->end) {
+                hermit_blk_read_sync(blist->next_sector, sector_buffer, &sector_size);
+                blist = sector_buffer + sizeof(block_list_t) * blist->next;
+		} else {
+			break;
+		}
+		counter++;
+	} while(1);
 	kfree(tmp_db);
 	return dirent;
 }
 
 static size_t initblkd_finddir(vfs_node_t* node, const char *name)
 {
-	uint32_t i, j;
+	uint32_t i, j, tmp_next = 0;
 	int size_db = sizeof(dir_block_t);
 	dir_block_t* tmp_db;
 	tmp_db = (dir_block_t*) kmalloc(sizeof(dir_block_t));
+	uint8_t* sector_buffer;
+        sector_buffer = (uint8_t*) kmalloc(sector_size);
 	dirent_t dirent;
 	dirent.vfs_node = 0;
 	block_list_t* blist = &node->block_list;
+	int count = 0;
 	do {
 		for(i=0; i<MAX_DATABLOCKS; i++) {
 			if(blist->data[i]) {
@@ -401,24 +535,32 @@ static size_t initblkd_finddir(vfs_node_t* node, const char *name)
 				}
 			}
 		}
-
-		blist = blist->next;
-	} while(blist);
+		if (!blist->end) {
+                hermit_blk_read_sync(blist->next_sector, sector_buffer, &sector_size);
+                blist = sector_buffer + sizeof(block_list_t) * blist->next;
+		} else {
+			break;
+		}
+		count++;
+	} while(1);
 	kfree(tmp_db);
 	return 0;
 }
 
 static size_t* initblkd_mkdir(vfs_node_t* act_node, const char* name)
 {
-	uint32_t i, j;
+	uint32_t i, j, k = 0, tmp_next = 0;
 	int ret = NULL;
 	dir_block_t* dir_block;
 	dir_block_t* tmp_dir_block;
 	dirent_t* dirent;
 	vfs_node_t* new_node;
 
+	size_t tmp_sector = 0, new_sector = 0;
+	int ns = 0;
+	uint8_t* sector_buffer;
+	sector_buffer = (uint8_t*) kmalloc(sector_size);
 	block_list_t* blist = &act_node->block_list;
-
 
 	if (BUILTIN_EXPECT(act_node->type != FS_DIRECTORY, 0))
 		goto out1;
@@ -461,12 +603,14 @@ static size_t* initblkd_mkdir(vfs_node_t* act_node, const char* name)
 	new_node->sector = node_sector;
 	memset(dir_block, 0x00, sizeof(dir_block_t));
 	new_node->block_list.data[0] = dir_block_sector;
+	new_node->block_list.end = 1;
 	strncpy(dir_block->entries[0].name, ".", MAX_FNAME);
 	dir_block->entries[0].vfs_node = node_sector;
 	strncpy(dir_block->entries[1].name, "..", MAX_FNAME);
 	dir_block->entries[1].vfs_node = act_node->sector;
 	do {
 		/* searching for a free directory block */
+		int new_db = 0;
 		for(i=0; i<MAX_DATABLOCKS; i++) {
 			if (!blist->data[i]) {
 				/* create tmp directory entry */
@@ -479,6 +623,7 @@ static size_t* initblkd_mkdir(vfs_node_t* act_node, const char* name)
 				initblkd_set_sector(blist->data[i], 1);
 				hermit_blk_write_sync(blist->data[i], next_dir_block, size_db);
 				kfree(next_dir_block);
+				new_db = 1;
 			}
 			hermit_blk_read_sync(blist->data[i], tmp_dir_block, &size_db);
 			for(j=0; j<max_direntries; j++) {
@@ -489,27 +634,66 @@ static size_t* initblkd_mkdir(vfs_node_t* act_node, const char* name)
 					hermit_blk_write_sync(blist->data[i], tmp_dir_block, size_db);
 					hermit_blk_write_sync(node_sector, new_node, size_vn);
 					hermit_blk_write_sync(dir_block_sector, dir_block, size_db);
+					if (blist->sector) {
+						if (j == max_direntries -1 && i == MAX_DATABLOCKS -1) {
+							blist->next++;
+							if (sector_size == (blist->next + 1) * sizeof(block_list_t) ||
+							    sector_size < (blist->next + 1) * sizeof(block_list_t)) {
+								blist->next_sector = 0;
+								blist->next = 0;
+							}
+						}
+						hermit_blk_write_sync(blist->sector, sector_buffer, sector_size);
+					}
 					ret = node_sector;
 					goto out4;
 				}
 			}
 		}
-
-		// that doesn't work so easy, we have to append it on the vfs_node, but that cast many other problems
-		// we could fill the block with empty lists during the creation of the vfs_node, so we will work with
-		// an array instead of a list? because we use at the moment a 512byte block for a ca 200byte vfs_node
-		// and than we could these to allocate a new sector for the next list if necessary
-
 		/* if all blocks are reserved, we have  to allocate a new one */
-		if (!blist->next) {
-			blist->next = (block_list_t*) kmalloc(sizeof(block_list_t));
-			if (blist->next)
-				memset(blist->next, 0x00, sizeof(block_list_t));
-		}
+		if (!blist->next_sector) {
+			blist->end = 0;
+			new_sector = initblkd_find_sector();
+		        initblkd_set_sector(new_sector, 1);
+			blist->next_sector = new_sector;
+			if (tmp_sector) {
+				hermit_blk_write_sync(tmp_sector, sector_buffer, sector_size);
+			}
+			memset(sector_buffer, 0x00, sector_size);
+		} else {
+			hermit_blk_read_sync(blist->next_sector, sector_buffer, &sector_size);
+			tmp_sector = blist->next_sector;
+			tmp_next = blist->next;
 
-		blist = blist->next;
+		}
+		block_list_t* old_bl = blist;
+		blist = sector_buffer + sizeof(block_list_t) * blist->next;
+		if (blist->data[0] && !new_sector) {
+			continue;
+		}
+		old_bl->end = 0;
+		block_list_t* new_bl;
+		new_bl = (block_list_t*) kmalloc(sizeof(block_list_t));
+		memset(new_bl, 0x00, sizeof(block_list_t));
+		if (new_sector) {
+			new_bl->sector = new_sector;
+			new_bl->next_sector = new_sector;
+			new_bl->next = 0;
+			new_bl->end = 1;
+		} else { 
+			new_bl->sector = tmp_sector;
+			new_bl->next_sector = tmp_sector;
+			new_bl->next = tmp_next;
+			new_bl->end = 1;
+		}
+		memcpy(blist, new_bl, sizeof(block_list_t));
+		kfree(new_bl);
+		tmp_sector = blist->next_sector;
+
+
 	} while(blist);
 out4:
+	kfree(sector_buffer);
 	kfree(tmp_dir_block);
 out3:
 	kfree(dir_block);
@@ -592,6 +776,11 @@ int initblkd_init(void)
 	vfs_node_t* tmp_vn;
 	sectors = hermit_blk_sectors();
 	sector_size = hermit_blk_sector_size();
+
+	int size_mb = (sector_size*sectors) / (1024*1024);
+	LOG_INFO("initblkd_init: hermit_blk device hast %i MB\n", size_mb);
+	LOG_INFO("initblkd_init: block_list_t: %i\n", sizeof(block_list_t));
+
 	num_bitmap_blocks = sectors/(sector_size*8);	// save in vfs_node?, then we could enlarge the disk without
 	max_direntries = sector_size/sizeof(dirent_t);	// greater problems, we need then a function like resizefs
 							// which enlarges the bitmap and moves the sectors which 
@@ -599,6 +788,8 @@ int initblkd_init(void)
 	first_sector += num_bitmap_blocks;
 	second_sector += num_bitmap_blocks;
 	size_t tmp_sector;
+
+
 
 	tmp_vn = (vfs_node_t*) kmalloc(sizeof(vfs_node_t));
 	tmp_db = (dir_block_t*) kmalloc(sizeof(dir_block_t));
@@ -638,6 +829,7 @@ int initblkd_init(void)
 		return -ENOMEM;
 		memset(dir_block, 0x00, sizeof(dir_block_t));
 		initblkd_root.block_list.data[0] = second_sector;
+		initblkd_root.block_list.end = 1;
 		strncpy(dir_block->entries[0].name, ".", MAX_FNAME);
 		dir_block->entries[0].vfs_node = fs_root;
 		strncpy(dir_block->entries[1].name, "..", MAX_FNAME);
@@ -673,20 +865,63 @@ int initblkd_init(void)
 		mkdir_fs(fs_root, "tmp");
 		mkdir_fs(tmp_sector, "test");
 
-/*		char testchars[sector_size];
+//		---- test functions ----
+/*
+		uint8_t test_blist[12];
+		strncpy (test_blist, "/tf", 4);
+		int v = 0;
+
+/		kprintf("for-loop\n");
+
+/*		---- create u directorys ----
+		for (int u = 1; u <= 500; u++) { // -6, wegen . .. bin sbin tmp test 
+			test_blist[3] = '0' + (u / 1000) % 10;
+			test_blist[4] = '0' + (u / 100) % 10;
+			test_blist[5] = '0' + (u / 10) % 10;
+			test_blist[6] = '0' + u % 10;
+
+			mkdir_fs(fs_root, (char*) test_blist);
+		}
+
+		---- create u files ----
+/*		for (int u = 1; u <= 40; u++) { // -6, wegen . .. bin sbin tmp test 
+			test_blist[3] = '0' + (u / 1000) % 10;
+			test_blist[4] = '0' + (u / 100) % 10;
+			test_blist[5] = '0' + (u / 10) % 10;
+			test_blist[6] = '0' + u % 10;
+
+			fildes_t test_files;
+			fildes_t* tfs = &test_files;
+			tfs->flags = O_CREAT;
+			open_fs(tfs, test_blist);
+			close_fs(tfs);
+		}
+
+/*		---- create file with i sectors ---
+/**/
+		char testchars[sector_size];
 		char output[sector_size];
 		for (i = 0; i < sector_size; i++) {
 			testchars[i] = '0' + i % 10;
 			output[i] = 0;
 		}
 
-*/		fildes_t testfile2;
-		fildes_t* tf2 = &testfile2;
 
+		fildes_t testfile2;
+		fildes_t* tf2 = &testfile2;
+		for (i = 0; i <600; i++){
 		tf2->flags = O_CREAT;
+		tf2->offset = i * sector_size;
 		open_fs(tf2, "/bin/tf2.c");
-		write_fs(tf2, "testabc", 7);
+		write_fs(tf2, testchars, sector_size);
 		close_fs(tf2);
+		}
+
+		tf2->flags = O_TRUNC;
+		open_fs(tf2, "/bin/tf2.c");
+		close_fs(tf2);
+
+//		---- create/truncate files with different filedescriptors and options ---
 /*		open_fs(tf2, "/bin/tf2.c");
 		write_fs(tf2, "jaratim", 7);
 		close_fs(tf2);
@@ -730,7 +965,7 @@ int initblkd_init(void)
 
 		kprintf("output: %s", output);
 */
-		int log_fd = fs_open("/bin/log.txt", O_CREAT);
+/*		int log_fd = fs_open("/bin/log.txt", O_CREAT);
 		fs_write(log_fd, "logging", 7);
 		fs_close(log_fd);
 
@@ -738,14 +973,15 @@ int initblkd_init(void)
 		int log_read = fs_open("/bin/tf2.c", O_RDONLY);
 		fs_read(log_read, buf, 10);
 		fs_close(log_read);
-		kprintf("buf: %s", buf);
+		kprintf("buf: %s\n", buf);
 
 /**/
 	} else {
 		LOG_INFO("initblkd_init: wrong filesystem, set HERMIT_BLK_FORMAT=1 to format blk device\n");
 		return 0;
 	}
-//	list_fs(first_sector, 2);
+
+	list_fs(first_sector, 2);
 	kfree(tmp_vn);
 	kfree(tmp_db);
 	uhyve_blk_init_ok = 1; //ACHTUNG: momentan lokal und nicht als externe Variable aus der uhyve-blk.h!!!!

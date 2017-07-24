@@ -1323,13 +1323,13 @@ int uhyve_init(char *path)
 	{
 		//TODO3: strncmp for different network interfaces for example tun/tap device or uhyvetap device
 //		char *hermit_netif = netif_str;
-		netfd = uhyve_net_init(guest_mem, netif_str);
+		netfd = uhyve_net_init(netif_str);
 	}
 
 	const char* blk_str = getenv("HERMIT_BLK");
 	if (blk_str)
 	{
-		diskfd = uhyve_blk_init(guest_mem, blk_str);
+		diskfd = uhyve_blk_init(blk_str);
 	}
 
 #ifdef KVM_CAP_X2APIC_API

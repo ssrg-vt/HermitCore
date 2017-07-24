@@ -280,7 +280,7 @@ void list_fs(size_t sector, uint32_t depth)
 	while ((dirent = readdir_fs(sector, i)).vfs_node != 0 ) {
 		for(j=0; j<depth; j++)
 			kputs("  ");
-		kprintf("%s", dirent.name);
+		kprintf("%s", dirent.name); //, dirent.vfs_node);
 
 		if (strcmp(dirent.name, ".") && strcmp(dirent.name, "..")) {
 			size_t new_node_sector = finddir_fs(sector, dirent.name); // hier gehts falsch oder?

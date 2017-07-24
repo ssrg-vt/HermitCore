@@ -126,19 +126,25 @@ typedef size_t (*mkdir_type_t) (size_t, const char *name);
 typedef struct block_list {
 	/// Array with pointers to data blocks
 	size_t data[MAX_DATABLOCKS];
-	/// Pointer to the next block_list in the list
-	struct block_list* next;
+	/// end of the block_list list
+	uint32_t end;
+	/// the next block_list in the list
+	uint32_t  next;
+	/// sector
+	size_t sector;
+	/// next sector
+	size_t next_sector;
 } block_list_t;
 
 typedef struct vfs_node {
 	/// The permissions mask.
-	uint32_t mask;		
+	uint32_t mask;
 	/// The owning user.
-	uint32_t uid;		
+	uint32_t uid;
 	/// The owning group.
-	uint32_t gid;		
+	uint32_t gid;
 	/// Includes the node type. See the defines above.
-	uint32_t type;		
+	uint32_t type;
 	/// Sector on blkd
 	size_t sector;
 	/// Open handler function pointer

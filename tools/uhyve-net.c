@@ -153,7 +153,7 @@ int set_mac() {
 	return 0;
 }
 //-------------------------------------- SETUP NETWORK ---------------------------------------------//
-static int uhyve_net_init(/*int vcpufd,*/ uint8_t *mem, char *hermit_netif)
+static int uhyve_net_init(char *hermit_netif)
 {
 	netif = hermit_netif;
 
