@@ -31,6 +31,7 @@
 #include <hermit/fs.h>
 #include <hermit/errno.h>
 #include <hermit/spinlock.h>
+#include <hermit/time.h>
 
 size_t fs_root = NULL;
 
@@ -40,19 +41,19 @@ ssize_t read_fs(fildes_t* file, uint8_t* buffer, size_t size)
 	vfs_node_t* node = file->node;
 	ssize_t ret = -EINVAL;
 
-	if (BUILTIN_EXPECT(!node || !buffer, 0))
+	if (BUILTIN_EXPECT(!node, 0))
 		return ret;
-
+	if (BUILTIN_EXPECT(!buffer, 0))
+		return ret;
         spinlock_lock(&node->lock);
         hermit_blk_write_sync(file->sector, node, size_vn);           	// lock the node on the blkd
 	// Has the node got a read callback?
 	if (node->read != 0)
-		ret = node->read(file, buffer, size);
-
+		ret = node->read(file, buffer, size);;
         spinlock_unlock(&node->lock);
         hermit_blk_write_sync(file->sector, node, size_vn);           	// lock the node on the blkd
 
-        kfree(node);
+//        kfree(node);
         return ret;
 }
 
@@ -62,16 +63,19 @@ ssize_t write_fs(fildes_t* file, uint8_t* buffer, size_t size)
 	vfs_node_t* node = file->node;
 	ssize_t ret = -EINVAL;
 
-	if (BUILTIN_EXPECT(!node || !buffer, 0))
+	if (BUILTIN_EXPECT(!node, 0))
+		return ret;
+	if (BUILTIN_EXPECT(!buffer, 0))
 		return ret;
         spinlock_lock(&node->lock);
         hermit_blk_write_sync(file->sector, node, size_vn);		// lock the node on the blkd
 	if (node->write != 0)
 		ret = node->write(file, buffer, size);
         spinlock_unlock(&node->lock);
+
         hermit_blk_write_sync(file->sector, node, size_vn);           	// lock the node on the blkd
 
-        kfree(node);
+//        kfree(node);
         return ret;
 }
 
@@ -323,23 +327,110 @@ int fs_open(char* filename, int oflags) {
 }
 
 int fs_read(int fildes, void *buf, size_t nbytes) {
-	int ret;
+	int ret = 0;
+	int tmp = 0;
+	int i = 0;
+	void* buffer;
 	fildes_t* fd = (fildes_t*) fildes;
-	ret = read_fs(fd, buf, nbytes);
+	size_t sectorsize = hermit_blk_sector_size();
+	do {
+		buffer = buf + sectorsize*i;
+		tmp = read_fs(fd, buffer, nbytes);
+		if (tmp < 0) {
+			return tmp;
+		}
+		nbytes -= tmp;
+		ret += tmp;
+		i++;
+	} while (nbytes > 0 && tmp > 0);
 	return ret;
 }
 
 int fs_write(int fildes, void *buf, size_t nbytes) {
-	int ret;
+	int ret = 0;
+	int tmp = 0;
+	int i = 0;
+	void* buffer;
 	fildes_t* fd = (fildes_t*) fildes;
-	ret = write_fs(fd, buf, nbytes);
+	size_t sectorsize = hermit_blk_sector_size();
+	do {
+		buffer = buf + sectorsize*i;
+		tmp = write_fs(fd, buffer, nbytes);
+		if (tmp < 0) {
+			return tmp;
+		}
+		nbytes -= tmp;
+		ret += tmp;
+		i++;
+	} while (nbytes > 0 && tmp > 0);
 	return ret;
 }
 
 int fs_close(int fildes) {
 	fildes_t* fd = (fildes_t*) fildes;
 	close_fs(fd);
+	kfree(fd->node);
 	kfree(fd);
 	return 0;
+}
+
+int fs_mkdir(const char* name) {
+        uint32_t ret = -5, i, j = 1;
+        vfs_node_t* file_node = NULL;  /* file node */
+        vfs_node_t* dir_node = NULL;   /* dir node */
+        vfs_node_t* tmp_node = NULL;
+        size_t dir_sector = 0, file_sector = 0;
+        file_node = kmalloc(size_vn);
+        if (BUILTIN_EXPECT(!file_node, 0))
+                return ret;
+        dir_node = kmalloc(size_vn);
+        if (BUILTIN_EXPECT(!dir_node, 0))
+                return ret;
+        char fname[MAX_FNAME];
+
+        if (BUILTIN_EXPECT(!name, 0))
+                return ret;
+	if (name[0] == '/') {
+		hermit_blk_read_sync(fs_root, file_node, &size_vn);
+		if (BUILTIN_EXPECT(!file_node, 0))
+			return ret;
+	} else {
+		return -1;
+	}
+	while((name[j] != '\0') || ((file_node != 0) && (file_node->type == FS_DIRECTORY))) {
+		i = 0;
+		while((name[j] != '/') && (name[j] != '\0')) {
+			fname[i] = name[j];
+			i++;
+			j++;
+		}
+		fname[i] = '\0';
+		tmp_node = dir_node;
+		dir_node = file_node;
+		file_node = tmp_node;
+		file_sector = finddir_fs(dir_node->sector, fname);
+		if (file_sector) {
+			hermit_blk_read_sync(file_sector, file_node, &size_vn);
+		} else {
+			kfree(file_node);
+			file_node = NULL;
+			if (name[j] == '/')
+				return -2;
+		}
+		if (name[j] == '/')
+			j++;
+	}
+	if(file_node) {
+		return -3;
+	} else {
+		if (!mkdir_fs(dir_node->sector, fname))
+			return -4;
+	}
+	return 0;
+}
+//static inline uint64_t get_clock_tick(void);
+uint64_t blk_get_time() {
+  	int ret = (int) get_clock_tick();
+	return ret;
 }
 

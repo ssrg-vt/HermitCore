@@ -10,7 +10,7 @@ add_executable(hellof hellof.f90)
 add_executable(pi pi.go)
 add_executable(ping ping.c)
 add_executable(blk blk.c)
-#add_executable(fs fs.c)
+add_executable(fs fs.c)
 
 add_executable(test-malloc test-malloc.c)
 add_executable(test-malloc-mt test-malloc-mt.c)

@@ -63,7 +63,7 @@ static int uhyve_blk_init(char *hermit_blk)
 	blkinfo.sector_size = blk_size;
 	blkinfo.num_sectors = lseek(diskfd, 0, SEEK_END) / 512;
 	blkinfo.rw = 1;
-	printf("BLK device attached with %i sectors and sector_size %i bytes\n", blkinfo.num_sectors, blkinfo.sector_size);
+//	printf("BLK device attached with %i sectors and sector_size %i bytes\n", blkinfo.num_sectors, blkinfo.sector_size);
 
 	return diskfd;
 }

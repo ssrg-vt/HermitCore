@@ -261,7 +261,7 @@ int open_fs(fildes_t* file, const char* fname);
 int close_fs(fildes_t * file);
 
 /** @brief Get dir entry at index
- * @param node VFS node to get dir entry from
+ * @param sector The sector on blkd where the VFS node is allocated to get dir entry from
  * @param index Index position of desired dir entry
  * @return
  * - The desired dir entry
@@ -270,19 +270,19 @@ int close_fs(fildes_t * file);
 struct dirent readdir_fs(size_t sector, uint32_t index);
 
 /** @brief Find a directory by looking for the dir name
- * @param node The node where to start the search from
+ * @param sector The sector on blkd where the node is allocated to start the search
  * @param name The dir name string
  * @return
- * - a VFS node pointer
+ * - new sector of the new VFS node
  * - NULL on failure
  */
 size_t finddir_fs(size_t sector, const char *name);
 
 /** @brief Make a new directory in a VFS node 
- * @param node Pointer to the node where the dir is to create in
+ * @param sector The sector where the node, where the dir is to create in, is allocated
  * @param name Name of the new directory
  * @return
- * - new VFS node pointer
+ * - new sector of the new node
  * - NULL on failure
  */
 size_t mkdir_fs(size_t sector, const char* name);
@@ -297,6 +297,62 @@ vfs_node_t* findnode_fs(const char* name);
 
 /** @brief List a filesystem hirachically */
 void list_fs(size_t sector, uint32_t depth);
+
+/*** simplified filesystem functions like syscall-functions for use in programs ***/
+/*** without need of selfcreated filedescriptors or knowledgement about sectors ***/
+
+/** @brief open file to read or write
+ * @param filename The path of the file
+ * @param oflags The open flags like O_CREAT O_TRUNC etc.
+ * @return
+ * - filedescriptor
+ * - ERRNO on error;
+ */
+int fs_open(char* filename, int oflags);
+
+/** @brief reads nbytes from a file into a buffer
+ * @param filedes The filedescriptor for the file to read
+ * @param buf pointer on a buffer
+ * @param nbytes number of bytes to read
+ * @return
+ * - number of bytes read
+ * - 0 on error
+ */
+int fs_read(int fildes, void *buf, size_t nbytes);
+
+/** @brief writes nbytes from a buffer into a file
+ * @param fildes The filedescriptor for the file to write
+ * @param buf pointer on a buffer
+ * @param nbytes number of bytes to write
+ * @return
+ * - number of bytes writen
+ * - 0 on error
+ */
+int fs_write(int fildes, void *buf, size_t nbytes);
+
+/** @brief close file
+ * @param fildes The filedescriptor for the file
+ * @return
+ *  0
+ */
+int fs_close(int fildes);
+
+/** @brief close file
+ * @param fildes The filedescriptor for the file
+ * @return
+ *  0
+ */
+int fs_mkdir(const char* name);
+/** @brief makes a new directory
+ * @param name The path and name of the directory to be created
+ * @return
+ *  0 success
+ * -1 no absoulute path use filesystem root /
+ * -2 no directory with this name to create new directory in
+ * -3 file or directory already existing
+ * -4 error by creating directory
+ * -5 error on allocating memory for this function
+ */
 
 int initblkd_init(void);
 
