@@ -754,6 +754,25 @@ found:
         return empty_sector;
 }
 
+int initblkd_bitmapinit(void) {
+	num_bitmap_blocks = sectors/(sector_size*8);
+	uint64_t bitmap_sector[(sector_size/8)];	// (sector_size / 64) * 8 , 8Bits per Byte
+	memset(bitmap_sector, 0x00, sector_size);
+	LOG_INFO("initblkd_init: we need %i blocks for the bit_map\n", num_bitmap_blocks);
+	size_t tmp_sector = begin_bitmap;
+	for(int i = 1; i <= num_bitmap_blocks; i++) {
+		hermit_blk_write_sync(tmp_sector++, bitmap_sector, sector_size);
+	}
+	uint64_t bit = 1;
+	for(int i = 0; i < (num_bitmap_blocks + 2); i++) {
+		bitmap_sector[0] |= bit;
+		bit = bit << 1;
+	}
+	hermit_blk_write_sync(begin_bitmap, bitmap_sector, sector_size);
+	LOG_INFO("initblkd_init: bitmap initialized\n");
+	return num_bitmap_blocks;
+}
+
 
 int initblkd_init(void)
 {
@@ -776,10 +795,9 @@ int initblkd_init(void)
 	LOG_INFO("initblkd_init: hermit_blk device hast %i MB\n", size_mb);
 	LOG_INFO("initblkd_init: block_list_t: %i\n", sizeof(block_list_t));
 
-	num_bitmap_blocks = sectors/(sector_size*8);	// save in vfs_node?, then we could enlarge the disk without
-	max_direntries = sector_size/sizeof(dirent_t);	// greater problems, we need then a function like resizefs
-							// which enlarges the bitmap and moves the sectors which 
-							// are needed for enlargement
+	num_bitmap_blocks = sectors/(sector_size*8);
+	max_direntries = sector_size/sizeof(dirent_t);
+
 	first_sector += num_bitmap_blocks;
 	second_sector += num_bitmap_blocks;
 	size_t tmp_sector;
@@ -802,14 +820,18 @@ int initblkd_init(void)
 	} else if (hermit_blk_stat() == 2){
 
 		dir_block_t* dir_block;
-		uint32_t i, j, k, l;
-		uint32_t mods_count = 0;
+
+		initblkd_bitmapinit();
 
 		/* Initialize the root directory. */
-		fs_root = first_sector;
+		size_t root_sector = initblkd_find_sector();
+		initblkd_set_sector(root_sector, 1);
+		size_t dirblock_sector = initblkd_find_sector();
+		initblkd_set_sector(dirblock_sector, 1);
+		fs_root = root_sector;
 		memset(&initblkd_root, 0x00, sizeof(vfs_node_t));
 		initblkd_root.type = FS_DIRECTORY;
-		initblkd_root.sector = first_sector;
+		initblkd_root.sector = root_sector;
 		initblkd_root.read = &initblkd_emu_readdir;
 		initblkd_root.readdir = &initblkd_readdir;
 		initblkd_root.finddir = &initblkd_finddir;
@@ -823,7 +845,7 @@ int initblkd_init(void)
 		if (BUILTIN_EXPECT(!dir_block, 0))
 		return -ENOMEM;
 		memset(dir_block, 0x00, sizeof(dir_block_t));
-		initblkd_root.block_list.data[0] = second_sector;
+		initblkd_root.block_list.data[0] = dirblock_sector;
 		initblkd_root.block_list.end = 1;
 		strncpy(dir_block->entries[0].name, ".", MAX_FNAME);
 		dir_block->entries[0].vfs_node = fs_root;
@@ -831,26 +853,10 @@ int initblkd_init(void)
 		dir_block->entries[1].vfs_node = fs_root;
 
 		LOG_INFO("initblkd_init: formatting hermit_blk device\n");
-		LOG_INFO("initblkd_init: writing root directory block and inode on disk\n");
 
-		hermit_blk_write_sync(second_sector, dir_block, sizeof(dir_block_t));
+		hermit_blk_write_sync(dirblock_sector, dir_block, sizeof(dir_block_t));
 		kfree(dir_block);
-		hermit_blk_write_sync(first_sector, &initblkd_root, sizeof(vfs_node_t));
-
-		uint64_t bitmap_sector[(sector_size/8)];	// (sector_size / 64) * 8 , 8Bits per Byte
-		memset(bitmap_sector, 0x00, sector_size);
-		LOG_INFO("initblkd_init: we need %i blocks for the bit_map\n", num_bitmap_blocks);
-		size_t tmp_sector = begin_bitmap;
-		for(i = 1; i <= num_bitmap_blocks; i++) {
-			hermit_blk_write_sync(tmp_sector++, bitmap_sector, sector_size);
-		}
-		uint64_t bit = 1;
-		for(i = 0; i < (num_bitmap_blocks + 2); i++) {
-			bitmap_sector[0] |= bit;
-			bit = bit << 1;
-		}
-		hermit_blk_write_sync(begin_bitmap, bitmap_sector, sector_size);
-		LOG_INFO("initblkd_init: bitmap initialized\n");
+		hermit_blk_write_sync(root_sector, &initblkd_root, sizeof(vfs_node_t));
 
 		/* create the directory bin and dev */
 
@@ -859,6 +865,9 @@ int initblkd_init(void)
 		tmp_sector = mkdir_fs(fs_root, "dev");
 		mkdir_fs(fs_root, "tmp");
 		mkdir_fs(tmp_sector, "test");
+
+		LOG_INFO("initblkd_init: root directory block and inode writen\n");
+
 
 //		---- test functions ----
 /*
@@ -936,7 +945,7 @@ int initblkd_init(void)
 		write_fs(tf4, testchars, sector_size);
 		close_fs(tf4);
 
-		list_fs(first_sector, 2);
+		list_fs(root_sector, 2);
 
 		tf4->offset = 4;
 		open_fs(tf4, "/dev/test/tf4.c");
@@ -975,8 +984,8 @@ int initblkd_init(void)
 		LOG_INFO("initblkd_init: wrong filesystem, set HERMIT_BLK_FORMAT=1 to format blk device\n");
 		return 0;
 	}
-	kprintf("fs_mkdir: %i", fs_mkdir("/bin/testdir"));
-//	list_fs(first_sector, 2);
+	fs_mkdir("/bin/testdir");
+//	list_fs(root_sector, 2);
 	kfree(tmp_vn);
 	kfree(tmp_db);
 	uhyve_blk_init_ok = 1; //ACHTUNG: momentan lokal und nicht als externe Variable aus der uhyve-blk.h!!!!
