@@ -764,7 +764,7 @@ int initblkd_bitmapinit(void) {
 		hermit_blk_write_sync(tmp_sector++, bitmap_sector, sector_size);
 	}
 	uint64_t bit = 1;
-	for(int i = 0; i < (num_bitmap_blocks + 2); i++) {
+	for(int i = 0; i < (num_bitmap_blocks); i++) {
 		bitmap_sector[0] |= bit;
 		bit = bit << 1;
 	}
