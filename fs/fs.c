@@ -431,7 +431,6 @@ int fs_mkdir(const char* name) {
 //static inline uint64_t get_clock_tick(void);
 uint64_t blk_get_time() {
   	int ret = (int) get_clock_tick();
-	kprintf ("%i", TIMER_FREQ);
 	return ret;
 }
 

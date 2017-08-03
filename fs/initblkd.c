@@ -749,8 +749,10 @@ int initblkd_find_sector(void) {
         }
 found:
         if (empty_sector <= last_bitmap) {
+		kprintf("~%i~", empty_sector);
                 empty_sector = -1;
         }
+//	kprintf("es: %i", empty_sector);
         return empty_sector;
 }
 
@@ -763,12 +765,27 @@ int initblkd_bitmapinit(void) {
 	for(int i = 1; i <= num_bitmap_blocks; i++) {
 		hermit_blk_write_sync(tmp_sector++, bitmap_sector, sector_size);
 	}
-	uint64_t bit = 1;
-	for(int i = 0; i < (num_bitmap_blocks); i++) {
-		bitmap_sector[0] |= bit;
-		bit = bit << 1;
+	int tmp = num_bitmap_blocks;
+	int j = 0;
+	tmp_sector = begin_bitmap;
+	while(tmp > 0) {
+		if (tmp > 64) {
+			uint64_t komp = 0;
+			bitmap_sector[((num_bitmap_blocks-tmp)/64)%(sector_size/8)] = ~komp;
+			tmp -= 64;
+			if (++j*64 == sector_size){
+				hermit_blk_write_sync(tmp_sector++, bitmap_sector, sector_size);
+			}
+			continue;
+		}
+		uint64_t bit = 1;
+		for(int i = 0; i < tmp; i++) {
+			bitmap_sector[((num_bitmap_blocks-tmp)/64)%(sector_size/8)] |= bit;
+			bit = bit << 1;
+		}
+		tmp -= 64;
 	}
-	hermit_blk_write_sync(begin_bitmap, bitmap_sector, sector_size);
+	hermit_blk_write_sync(tmp_sector, bitmap_sector, sector_size);
 	LOG_INFO("initblkd_init: bitmap initialized\n");
 	return num_bitmap_blocks;
 }
@@ -829,6 +846,7 @@ int initblkd_init(void)
 		size_t dirblock_sector = initblkd_find_sector();
 		initblkd_set_sector(dirblock_sector, 1);
 		fs_root = root_sector;
+		LOG_INFO("root_sector: %i, dirblock_sector: %i\n", root_sector, dirblock_sector);
 		memset(&initblkd_root, 0x00, sizeof(vfs_node_t));
 		initblkd_root.type = FS_DIRECTORY;
 		initblkd_root.sector = root_sector;
@@ -860,11 +878,11 @@ int initblkd_init(void)
 
 		/* create the directory bin and dev */
 
-		mkdir_fs(fs_root, "bin");
-		mkdir_fs(fs_root, "sbin");
-		tmp_sector = mkdir_fs(fs_root, "dev");
-		mkdir_fs(fs_root, "tmp");
-		mkdir_fs(tmp_sector, "test");
+		LOG_INFO("create bin: %i\n", mkdir_fs(fs_root, "bin"));
+		LOG_INFO("create sbin: %i\n", mkdir_fs(fs_root, "sbin"));
+		LOG_INFO("create dev: %i\n", mkdir_fs(fs_root, "dev"));
+		LOG_INFO("create tmp: %i\n", (tmp_sector = mkdir_fs(fs_root, "tmp")));
+		LOG_INFO("create tmp/test: %i\n", mkdir_fs(tmp_sector, "test"));
 
 		LOG_INFO("initblkd_init: root directory block and inode writen\n");
 
@@ -984,8 +1002,8 @@ int initblkd_init(void)
 		LOG_INFO("initblkd_init: wrong filesystem, set HERMIT_BLK_FORMAT=1 to format blk device\n");
 		return 0;
 	}
-	fs_mkdir("/bin/testdir");
-//	list_fs(root_sector, 2);
+//	fs_mkdir("/bin/testdir");
+//	list_fs(fs_root, 2);
 	kfree(tmp_vn);
 	kfree(tmp_db);
 	uhyve_blk_init_ok = 1; //ACHTUNG: momentan lokal und nicht als externe Variable aus der uhyve-blk.h!!!!

@@ -66,6 +66,39 @@ int check_sector_write(uint64_t sector)
 
 	return 0;
 }
+int check_write_speed(uint64_t sector)
+{
+	int rlen = SECTOR_SIZE;
+	unsigned i;
+
+	for (i = 0; i < SECTOR_SIZE; i++) {
+		wbuf[i] = 'a' + i % 26;
+	}
+
+	if (hermit_blk_write_sync(sector, wbuf, SECTOR_SIZE) != 0)
+		return -1;
+
+	return 0;
+}
+int check_read_speed(uint64_t sector)
+{
+	int rlen = SECTOR_SIZE;
+	unsigned i;
+
+	if (hermit_blk_read_sync(sector, rbuf, &rlen) != 0)
+		return -2;
+
+	if (rlen != SECTOR_SIZE)
+		return -3;
+
+	for(i = 0; i < SECTOR_SIZE; i++) {
+		if (rbuf[i] != 'a' + i % 26)
+			/*Check failed */
+			return -4;
+	}
+
+	return 0;
+}
 
 
 int main(int argc, char** argv) {
@@ -74,14 +107,10 @@ int main(int argc, char** argv) {
 
 	printf("\n**** Hermit standalone test_blk ****\n\n");
 
-	printf("running");
 	/* Write and read/check one tenth of the disk. */
 	nsectors = hermit_blk_sectors();
-	printf(".");
-	printf("\n\n|");
 
-//	int p = 0, j = 1;
-	for (i = 0; i < nsectors; i += 10) {
+	for (i = 0; i < nsectors; i += 1) {
 		if ((err = check_sector_write(i)) < 0) {
 			printf("check_sector_write() failed in sector %i : error %i\n", i, err);
 			return -1;
@@ -93,20 +122,43 @@ int main(int argc, char** argv) {
 		}*/
 
 	}
-	printf("|\n\n");
+	printf("\nall sectors writable\n\n");
+	uint64_t time1 = blk_get_time();
+	for (i = 0; i < nsectors; i += 1) {
+		if ((err = check_write_speed(i)) < 0) {
+			printf("check_write_speed() failed in sector %i : error %i\n", i, err);
+			return -1;
+		}
+
+	}
 	/* Check edge case: read/write of last sector on the device. */
-	printf(".");
+
+	uint64_t time2 = blk_get_time();
+	printf("%i MBytes writen with %i MB/s\n", i*SECTOR_SIZE/1024/1024, ((i*SECTOR_SIZE)/(time2-time1)*100)/1024/1024);
+
+	uint64_t time3 = blk_get_time();
+	for (i = 0; i < nsectors; i += 1) {
+		if ((err = check_read_speed(i)) < 0) {
+			printf("check_read_speed() failed in sector %i : error %i\n", i, err);
+			return -1;
+		}
+
+	}
+	printf("\n");
+	/* Check edge case: read/write of last sector on the device. */
+
+	uint64_t time4 = blk_get_time();
+	printf("%i MBytes read with %i MB/s\n", i*SECTOR_SIZE/1024/1024, ((i*SECTOR_SIZE)/(time4-time3)*100)/1024/1024);
+
 	if (hermit_blk_write_sync(nsectors - 1, wbuf, SECTOR_SIZE ) != 0) {
 		printf("check edge cases: write on last sector failed");
 		return -2;
 	}
-	printf(".");
 	rlen = SECTOR_SIZE;
 	if (hermit_blk_read_sync(nsectors -1, rbuf, &rlen ) != 0) {
 		printf("check edge cases: read on last sector failed");
 		return -3;
 	}
-	printf(".");
 	if (rlen != SECTOR_SIZE) {
 		printf("check edge cases: too less bytes read");
 		return -4;
@@ -114,7 +166,6 @@ int main(int argc, char** argv) {
 
 	/* Check edge cases: should not be able to read or write beyond end of device. */
 
-	printf(". ");
 	if (hermit_blk_write_sync(nsectors - 1, wbuf, (2 * SECTOR_SIZE)) >= 0) {
 		printf("check edge cases: writed on sector behind device");
 		return -5;
