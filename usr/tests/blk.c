@@ -32,10 +32,21 @@
 #include <errno.h>
 #include <signal.h>
 #include <assert.h>
+#include <time.h>
+#include <sys/time.h>
 
 #define SECTOR_SIZE	512
 
 /*space fpr 2 sectors for edge-case tests */
+extern unsigned int get_cpufreq(void);
+
+inline static unsigned long long rdtsc(void)
+{
+	unsigned long lo, hi;
+	asm volatile ("rdtsc" : "=a"(lo), "=d"(hi) :: "memory");
+	return ((unsigned long long) hi << 32ULL | (unsigned long long) lo);
+}
+
 static uint8_t wbuf[SECTOR_SIZE * 2];
 static uint8_t rbuf[SECTOR_SIZE * 2];
 
@@ -43,6 +54,7 @@ int check_sector_write(uint64_t sector)
 {
 	int rlen = SECTOR_SIZE;
 	unsigned i;
+
 
 	for (i = 0; i < SECTOR_SIZE; i++) {
 		wbuf[i] = '0' + i % 10;
@@ -104,6 +116,8 @@ int check_read_speed(uint64_t sector)
 int main(int argc, char** argv) {
 	size_t i, nsectors;
 	int rlen, err;
+	uint64_t start, end;
+	uint32_t freq = get_cpufreq(); /* in MHz */
 
 	printf("\n**** Hermit standalone test_blk ****\n\n");
 
@@ -123,7 +137,7 @@ int main(int argc, char** argv) {
 
 	}
 	printf("\nall sectors writable\n\n");
-	uint64_t time1 = blk_get_time();
+	start = rdtsc();
 	for (i = 0; i < nsectors; i += 1) {
 		if ((err = check_write_speed(i)) < 0) {
 			printf("check_write_speed() failed in sector %i : error %i\n", i, err);
@@ -133,10 +147,9 @@ int main(int argc, char** argv) {
 	}
 	/* Check edge case: read/write of last sector on the device. */
 
-	uint64_t time2 = blk_get_time();
-	printf("%i MBytes writen with %i MB/s\n", i*SECTOR_SIZE/1024/1024, ((i*SECTOR_SIZE)/(time2-time1)*100)/1024/1024);
-
-	uint64_t time3 = blk_get_time();
+	end = rdtsc();
+	printf("Time to write %llu bytes: %llu nsec (ticks %llu)\n => %llu MB/s\n", i*SECTOR_SIZE, ((end-start)*1000ULL)/freq, end-start, i*SECTOR_SIZE*954/(((end-start)*1000ULL)/freq));
+	start = rdtsc();
 	for (i = 0; i < nsectors; i += 1) {
 		if ((err = check_read_speed(i)) < 0) {
 			printf("check_read_speed() failed in sector %i : error %i\n", i, err);
@@ -146,9 +159,8 @@ int main(int argc, char** argv) {
 	}
 	printf("\n");
 	/* Check edge case: read/write of last sector on the device. */
-
-	uint64_t time4 = blk_get_time();
-	printf("%i MBytes read with %i MB/s\n", i*SECTOR_SIZE/1024/1024, ((i*SECTOR_SIZE)/(time4-time3)*100)/1024/1024);
+	end = rdtsc();
+	printf("Time to read and check %llu bytes: %llu nsec (ticks %llu)\n => %llu MB/s\n", i*SECTOR_SIZE, ((end-start)*1000ULL)/freq, end-start, i*SECTOR_SIZE*954/(((end-start)*1000ULL)/freq));
 
 	if (hermit_blk_write_sync(nsectors - 1, wbuf, SECTOR_SIZE ) != 0) {
 		printf("check edge cases: write on last sector failed");
