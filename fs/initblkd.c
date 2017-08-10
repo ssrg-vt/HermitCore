@@ -731,9 +731,10 @@ int initblkd_find_sector(void) {
         memset(bitmap_sector, 0x00, sector_size);
         for (i = begin_bitmap; i <= last_bitmap; i++) {
                 hermit_blk_read_sync(i, bitmap_sector, &sector_size);
-                for (j = 0; j < (sector_size/8); j++) {
-                        if (bitmap_sector[j] == 0xFFFFFFFFFFFFFFFF) {
-                                tmp_sector += sector_size/8;
+                for (j = 0; j < 64; j++) {
+			uint64_t komp = 0;
+                        if (bitmap_sector[j] == ~komp) {
+                                tmp_sector += 64;
                                 continue;
                         }
                         uint64_t running_bit = 1;
