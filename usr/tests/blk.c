@@ -47,6 +47,7 @@ inline static unsigned long long rdtsc(void)
 	return ((unsigned long long) hi << 32ULL | (unsigned long long) lo);
 }
 
+
 static uint8_t wbuf[SECTOR_SIZE * 2];
 static uint8_t rbuf[SECTOR_SIZE * 2];
 
@@ -118,49 +119,11 @@ int main(int argc, char** argv) {
 	int rlen, err;
 	uint64_t start, end;
 	uint32_t freq = get_cpufreq(); /* in MHz */
+	nsectors = hermit_blk_sectors();
 
 	printf("\n**** Hermit standalone test_blk ****\n\n");
 
-	/* Write and read/check one tenth of the disk. */
-	nsectors = hermit_blk_sectors();
-
-	for (i = 0; i < nsectors; i += 1) {
-		if ((err = check_sector_write(i)) < 0) {
-			printf("check_sector_write() failed in sector %i : error %i\n", i, err);
-			return -1;
-		}
-/*		p =  (i*100 / nsectors);
-		if (p > 2*j) {
-			printf(".");
-			j++; 
-		}*/
-
-	}
-	printf("\nall sectors writable\n\n");
-	start = rdtsc();
-	for (i = 0; i < nsectors; i += 1) {
-		if ((err = check_write_speed(i)) < 0) {
-			printf("check_write_speed() failed in sector %i : error %i\n", i, err);
-			return -1;
-		}
-
-	}
 	/* Check edge case: read/write of last sector on the device. */
-
-	end = rdtsc();
-	printf("Time to write %llu bytes: %llu nsec (ticks %llu)\n => %llu MB/s\n", i*SECTOR_SIZE, ((end-start)*1000ULL)/freq, end-start, i*SECTOR_SIZE*954/(((end-start)*1000ULL)/freq));
-	start = rdtsc();
-	for (i = 0; i < nsectors; i += 1) {
-		if ((err = check_read_speed(i)) < 0) {
-			printf("check_read_speed() failed in sector %i : error %i\n", i, err);
-			return -1;
-		}
-
-	}
-	printf("\n");
-	/* Check edge case: read/write of last sector on the device. */
-	end = rdtsc();
-	printf("Time to read and check %llu bytes: %llu nsec (ticks %llu)\n => %llu MB/s\n", i*SECTOR_SIZE, ((end-start)*1000ULL)/freq, end-start, i*SECTOR_SIZE*954/(((end-start)*1000ULL)/freq));
 
 	if (hermit_blk_write_sync(nsectors - 1, wbuf, SECTOR_SIZE ) != 0) {
 		printf("check edge cases: write on last sector failed");
@@ -189,6 +152,45 @@ int main(int argc, char** argv) {
 		printf("check edge cases: read on sector behind device");
 		return -6;
 	}
+
+
+
+	/* Write and read/check one tenth of the disk. */
+
+	for (i = 0; i < nsectors; i += 10) {
+		if ((err = check_sector_write(i)) < 0) {
+			printf("check_sector_write() failed in sector %i : error %i\n", i, err);
+			return -1;
+		}
+/*		p =  (i*100 / nsectors);
+		if (p > 2*j) {
+			printf(".");
+			j++; 
+		}*/
+
+	}
+	start = rdtsc();
+	for (i = 0; i < nsectors; i += 1) {
+		if ((err = check_write_speed(i)) < 0) {
+			printf("check_write_speed() failed in sector %i : error %i\n", i, err);
+			return -1;
+		}
+
+	}
+
+	end = rdtsc();
+	printf("Time to write %llu bytes: %llu nsec (ticks %llu)\n => %llu MB/s\n", i*SECTOR_SIZE, ((end-start)*1000ULL)/freq, end-start, i*SECTOR_SIZE*954/(((end-start)*1000ULL)/freq));
+	start = rdtsc();
+	for (i = 0; i < nsectors; i += 1) {
+		if ((err = check_read_speed(i)) < 0) {
+			printf("check_read_speed() failed in sector %i : error %i\n", i, err);
+			return -1;
+		}
+
+	}
+	printf("\n");
+	end = rdtsc();
+	printf("Time to read and check %llu bytes: %llu nsec (ticks %llu)\n => %llu MB/s\n", i*SECTOR_SIZE, ((end-start)*1000ULL)/freq, end-start, i*SECTOR_SIZE*954/(((end-start)*1000ULL)/freq));
 
 	printf("\n\n");
 	printf("SUCCESS\n\n");
