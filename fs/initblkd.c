@@ -833,7 +833,7 @@ int initblkd_init(void)
 		LOG_INFO("initblkd_init: hermit_blk device is initialized\n");
 		LOG_INFO("initblkd_init: hermit_blk device has %i sectors and the sector size is %i Bytes\n",
 			 sectors, sector_size);
-		fs_root = sector_size;
+			fs_root = first_sector;
 	} else if (hermit_blk_stat() == 2){
 
 		dir_block_t* dir_block;
