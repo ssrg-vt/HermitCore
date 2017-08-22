@@ -32,8 +32,6 @@
 #include <hermit/stddef.h>
 #include <hermit/spinlock.h>
 
-#ifdef USE_E1000
-
 #define NUM_RX_DESCRIPTORS	64
 #define NUM_TX_DESCRIPTORS	64
 
@@ -324,7 +322,5 @@ typedef struct e1000if {
  * Initialize the network driver for the RealTek RTL8139 family
  */
 err_t e1000if_init(struct netif* netif);
-
-#endif
 
 #endif

@@ -194,17 +194,16 @@ Lno_mbinfo:
     xor rcx, rcx
     mov rsi, 510*0x200000
     sub rsi, kernel_start
-    mov r11, QWORD [image_size]
 Lremap:
     mov QWORD [rdi], rax
     add rax, 0x200000
     add rcx, 0x200000
     add rdi, 8
-    ; note: the whole code segement has to fit in the first pgd
+    ; note: the whole code segement muust fit in the first pgd
     cmp rcx, rsi
-    jnl Lno_pml4_init
-    cmp rcx, r11
-    jl Lremap
+    jnb Lno_pml4_init
+    cmp rcx, QWORD [image_size]
+    jb Lremap
 
 Lno_pml4_init:
     ; Set CR3
@@ -416,6 +415,7 @@ extern irq_handler
 extern get_current_stack
 extern finish_task_switch
 extern syscall_handler
+extern kernel_stack
 
 global getcontext
 align 64
