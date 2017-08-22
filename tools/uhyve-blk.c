@@ -37,12 +37,12 @@ static uhyve_blkinfo_t blkinfo;
 //-------------------------------------- SETUP NETWORK ---------------------------------------------//
 static int uhyve_blk_init(char *hermit_blk)
 {
-	size_t (blk_size);
+	size_t blk_size = HERMIT_BLK_BS;
 	char* str_blk_bs = getenv("HERMIT_BLK_BS");
 	if (str_blk_bs) {
 		blk_size = (size_t) atoi(str_blk_bs);
-		if (blk_size < 255) {
-			err(1, "ERROR: Blocksize must be greater then 255");
+		if (blk_size < 511) {
+			err(1, "ERROR: Blocksize must be greater then 511");
 			return -3;
 		}
 	} else {
@@ -61,7 +61,7 @@ static int uhyve_blk_init(char *hermit_blk)
 	}
 
 	blkinfo.sector_size = blk_size;
-	blkinfo.num_sectors = lseek(diskfd, 0, SEEK_END) / 512;
+	blkinfo.num_sectors = lseek(diskfd, 0, SEEK_END) / blk_size;
 	blkinfo.rw = 1;
 //	printf("BLK device attached with %i sectors and sector_size %i bytes\n", blkinfo.num_sectors, blkinfo.sector_size);
 
