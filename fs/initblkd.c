@@ -750,10 +750,8 @@ int initblkd_find_sector(void) {
         }
 found:
         if (empty_sector <= last_bitmap) {
-		kprintf("~%i~", empty_sector);
                 empty_sector = -1;
         }
-//	kprintf("es: %i", empty_sector);
         return empty_sector;
 }
 
@@ -835,6 +833,7 @@ int initblkd_init(void)
 		LOG_INFO("initblkd_init: hermit_blk device is initialized\n");
 		LOG_INFO("initblkd_init: hermit_blk device has %i sectors and the sector size is %i Bytes\n",
 			 sectors, sector_size);
+		fs_root = sector_size;
 	} else if (hermit_blk_stat() == 2){
 
 		dir_block_t* dir_block;
@@ -1004,7 +1003,7 @@ int initblkd_init(void)
 		return 0;
 	}
 //	fs_mkdir("/bin/testdir");
-//	list_fs(fs_root, 2);
+	list_fs(fs_root, 2);
 	kfree(tmp_vn);
 	kfree(tmp_db);
 	uhyve_blk_init_ok = 1; //ACHTUNG: momentan lokal und nicht als externe Variable aus der uhyve-blk.h!!!!
