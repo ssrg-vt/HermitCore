@@ -46,106 +46,72 @@
 #define PAGE_2M_BITS		21
 /// The size of a single page in bytes
 #define PAGE_SIZE		( 1L << PAGE_BITS)
-/// Mask the page address without page map flags and XD flag
-#if 0
 #define PAGE_MASK		((~0L) << PAGE_BITS)
-#define PAGE_2M_MASK		(~0L) << PAGE_2M_BITS)
-#else
-#define PAGE_MASK		(((~0L) << PAGE_BITS)) // & ~PG_XD)
-#define PAGE_2M_MASK		(((~0L) << PAGE_2M_BITS)) // & ~PG_XD)
-#endif
+#define PAGE_2M_MASK		((~0L) << PAGE_2M_BITS)
 
-#if 0
-/// Total operand width in bits
-#define BITS			32
-/// Physical address width (we dont support PAE)
-#define PHYS_BITS		BITS
-/// Linear/virtual address width
-#define VIRT_BITS		BITS
-/// Page map bits
-#define PAGE_MAP_BITS	10
-/// Number of page map indirections
-#define PAGE_LEVELS		2
-#else
 /// Total operand width in bits
 #define BITS			64
 /// Physical address width (maximum value)
-#define PHYS_BITS		52
+#define PHYS_BITS		48
 /// Linear/virtual address width
 #define VIRT_BITS		48
 /// Page map bits
-#define PAGE_MAP_BITS	9
+#define PAGE_MAP_BITS		9
 /// Number of page map indirections
 #define PAGE_LEVELS		4
-
-/** @brief Sign extending a integer
- *
- * @param addr The integer to extend
- * @param bits The width if addr which should be extended
- * @return The extended integer
- */
-static inline size_t sign_extend(ssize_t addr, int bits)
-{
-	int shift = BITS - bits;
-	return (addr << shift) >> shift; // sign bit gets copied during arithmetic right shift
-}
-#endif
-
-/// Make address canonical
-#if 0
-#define CANONICAL(addr)		(addr) // only for 32 bit paging
-#else
-#define CANONICAL(addr)		sign_extend(addr, VIRT_BITS)
-#endif
 
 /// The number of entries in a page map table
 #define PAGE_MAP_ENTRIES	       (1L << PAGE_MAP_BITS)
 
 /// Align to next page
-#define PAGE_FLOOR(addr)        (((addr) + PAGE_SIZE - 1) & PAGE_MASK)
+#define PAGE_CEIL(addr)        (((addr) + PAGE_SIZE - 1) & PAGE_MASK)
 /// Align to page
-#define PAGE_CEIL(addr)         ( (addr)                  & PAGE_MASK)
+#define PAGE_FLOOR(addr)         ( (addr)                  & PAGE_MASK)
 
 /// Align to next 2M boundary
-#define PAGE_2M_FLOOR(addr)	(((addr) + (1L << 21) - 1) & ((~0L) << 21))
-/// Align to nex 2M boundary
-#define PAGE_2M_CEIL(addr)	( (addr)                   & ((~0L) << 21))
+#define PAGE_2M_CEIL(addr)	(((addr) + (1L << 21) - 1) & ((~0L) << 21))
+/// Align to 2M boundary
+#define PAGE_2M_FLOOR(addr)	( (addr)                   & ((~0L) << 21))
+// Align the kernel end
+#define KERNEL_END_CEIL(addr)	(((addr) + (16L << 10)) & ~0xFFFF)
 
 /// Page is present
-#define PG_PRESENT		(1 << 0)
+#define PG_PRESENT		(1UL << 0)
 /// Page is read- and writable
-#define PG_RW			(1 << 1)
+#define PG_RW			(1UL << 1)
 /// Page is addressable from userspace
-#define PG_USER			(1 << 2)
+#define PG_USER			(1UL << 2)
 /// Page write through is activated
-#define PG_PWT			(1 << 3)
+#define PG_PWT			(1UL << 3)
 /// Page cache is disabled
-#define PG_PCD			(1 << 4)
+#define PG_PCD			(1UL << 4)
 /// Page was recently accessed (set by CPU)
-#define PG_ACCESSED		(1 << 5)
+#define PG_ACCESSED		(1UL << 5)
 /// Page is dirty due to recent write-access (set by CPU)
-#define PG_DIRTY		(1 << 6)
+#define PG_DIRTY		(1UL << 6)
 /// Huge page: 4MB (or 2MB, 1GB)
-#define PG_PSE			(1 << 7)
+#define PG_PSE			(1UL << 7)
 /// Page attribute table
 #define PG_PAT			PG_PSE
-#if 1
-/* @brief Global TLB entry (Pentium Pro and later)
- *
- * HermitCore is a single-address space operating system
- * => CR3 never changed => The flag isn't required for HermitCore
- */
+
+#define PG_DEVICE		(1UL << 8)
+#define PG_NX			0
 #define PG_GLOBAL		0
-#else
-#define PG_GLOBAL		(1 << 8)
-#endif
+
 /// This table is a self-reference and should skipped by page_map_copy()
-#define PG_SELF			(1 << 9)
+#define PG_SELF			(1UL << 63)
 
-/// Disable execution for this page
-//#define PG_XD			(1L << 63)
+#define PT_PT			0x713UL
+#define PT_MEM			0x713UL
+#define PT_MEM_CD		0x70FUL
+#define PT_DEVICE		0x707UL
 
-#define PG_NX (0)
+#define PT_SELF			(1UL << 55)
+#define PT_AF			(1UL << 10)	/* Access Flag */
+#define PT_CONTIG		(1UL << 52)	/* Contiguous bit */
+#define PT_S			(3UL << 8)
+#define PT_PXN			(1UL << 53)
+#define PT_UXN			(1UL << 54)
 
 /** @brief Converts a virtual address to a physical
  *
@@ -154,7 +120,7 @@ static inline size_t sign_extend(ssize_t addr, int bits)
  * @param addr Virtual address to convert
  * @return physical address
  */
-static inline size_t virt_to_phys(size_t vir) { return 0;}
+size_t virt_to_phys(size_t vir);
 
 /** @brief Initialize paging subsystem
  *
@@ -174,7 +140,7 @@ int page_init(void);
  * @param do_ipi if set, inform via IPI all other cores
  * @return
  */
-int __page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t bits, uint8_t do_ipi);
+int __page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t bits);
 
 /** @brief Map a continuous region of pages
  *
@@ -186,7 +152,7 @@ int __page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t bits, uint8
  */
 static inline int page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t bits)
 {
-	return __page_map(viraddr, phyaddr, npages, bits, 1);
+	return __page_map(viraddr, phyaddr, npages, bits);
 }
 
 /** @brief Unmap a continuous region of pages
@@ -195,7 +161,7 @@ static inline int page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t
  * @param npages The range's size in pages
  * @return
  */
-static inline int page_unmap(size_t viraddr, size_t npages) { return 0; }
+int page_unmap(size_t viraddr, size_t npages);
 
 /** @brief Change the page permission in the page tables of the current task
  *
@@ -211,4 +177,67 @@ static inline int page_unmap(size_t viraddr, size_t npages) { return 0; }
  * - -EINVAL (-22) on failure.
  */
 int page_set_flags(size_t viraddr, uint32_t npages, int flags);
+
+/** @brief Handler to map on demand pages for the heap
+ *
+ * @return
+ * - 0 on success
+ * - -EINVAL (-22) on failure.
+ */
+int page_fault_handler(size_t viraddr);
+
+/** @brief Flush Translation Lookaside Buffer
+ */
+static inline void tlb_flush(void)
+{
+	asm volatile(
+		"dsb ishst\n\t"         // ensure write has completed
+		"tlbi vmalle1is\n\t"    // invalidate all TLB entries
+		"dsb ish\n\t"           // ensure completion of TLB invalidation
+		"isb"                   // synchronize context
+		:
+		:
+		: "memory"
+	);
+}
+
+/** @brief Flush a specific page entry in TLB
+ * @param addr The (virtual) address of the page to flush
+ */
+static inline void tlb_flush_one_page(size_t addr)
+{
+	addr = addr >> PAGE_BITS;
+
+	asm volatile(
+		"dsb ishst\n\t"         // ensure write has completed
+		"tlbi vale1is, %0 \n\t"
+		"dsb ish\n\t"           // ensure completion of TLB invalidation
+		"isb"                   // synchronize context
+                :
+		: "r"(addr)
+		: "memory"
+	);
+}
+
+/** @brief Flush a range of page entries in TLB
+ * @param addr The (virtual) start address
+ * @param end The (virtual) end address
+ */
+static inline void tlb_flush_range(size_t start, size_t end)
+{
+	if ((end - start) > (1024ULL << PAGE_BITS)) {
+		tlb_flush();
+		return;
+	}
+
+	start = start >> PAGE_BITS;
+	end = end >> PAGE_BITS;
+
+	asm volatile ("dsb ishst" ::: "memory");
+	for (size_t addr = start; addr < end; addr++)
+		asm("tlbi vaae1is, %0" :: "r"(addr));
+	asm volatile ("dsb ish" ::: "memory");
+	asm volatile ("isb" ::: "memory");
+}
+
 #endif

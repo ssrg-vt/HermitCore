@@ -31,7 +31,7 @@
  * @brief Functions related to IRQ configuration
  *
  * This file contains definitions of inline functions
- * for enabling and disabling IRQ handling.
+ * for enabling and disabling exception handling.
  */
 
 #ifndef __ARCH_IRQFLAGS_H__
@@ -41,35 +41,46 @@
 extern "C" {
 #endif
 
-/** @brief Determines, if the interrupt flags (IF) is set
+#define IRQ_FLAG_F	(1<<6)
+#define IRQ_FLAG_I	(1<<7)
+#define IRQ_FLAG_A	(1<<8)
+#define IRQ_FLAG_D	(1<<9)
+
+inline static uint32_t get_daif(void)
+{
+	size_t flags;
+	asm volatile("mrs %0, daif" : "=r"(flags) :: "memory");
+	return flags;
+}
+
+/** @brief Determines, if the exception bit mask bits (DAIF) allows exceptions
  *
  * @return
- * - 1 interrupt flag is set
- * - 0 interrupt flag is cleared
+ * - 1 DAIF is cleared and allows exceptions
+ * - 0 DAIF is cleared and allows exceptions
  */
 inline static uint8_t is_irq_enabled(void)
 {
-	size_t flags;
-	//asm volatile("pushf; pop %0": "=r"(flags) : : "memory");
-	if (flags & (1 << 9))
-		return 1;
-	return 0;
+	size_t flags = get_daif();
+	if (flags & (IRQ_FLAG_A|IRQ_FLAG_I|IRQ_FLAG_F))
+		return 0;
+	return 1;
 }
 
 /** @brief Disable IRQs
  *
- * This inline function just clears out the interrupt bit
+ * This inline function just set the exception bit mask bits
  */
-inline static void irq_disable(void) {
-	//asm volatile("cli" ::: "memory");
-}
+ static inline void irq_disable(void) {
+         asm volatile("msr daifset, 0b111" ::: "memory");
+ }
 
 /** @brief Enable IRQs
  *
- * This inline function just sets the interrupt bit
+ * This inline function just clear out the exception bit mask bits
  */
-inline static void irq_enable(void) {
-	//asm volatile("sti" ::: "memory");
+static inline void irq_enable(void) {
+        asm volatile("msr daifclr, 0b111" ::: "memory");
 }
 
 /** @brief Disable IRQs (nested)

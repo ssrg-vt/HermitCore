@@ -43,6 +43,20 @@
 extern "C" {
 #endif
 
+/* GIC related constants */
+#define GICD_BASE			(1ULL << 39)
+#define GICC_BASE			(GICD_BASE + GICD_SIZE)
+#define GIC_SIZE			(GICD_SIZE + GICC_SIZE)
+#define GICD_SIZE			0x010000ULL
+#define GICC_SIZE			0x020000ULL
+
+/* interrupts */
+#define INT_PPI_VMAINT			(16+9)
+#define INT_PPI_HYP_TIMER		(16+10)
+#define INT_PPI_VIRT_TIMER 		(16+11)
+#define INT_PPI_SPHYS_TIMER		(16+13)
+#define INT_PPI_NSPHYS_TIMER		(16+14)
+
 /** @brief Pointer-type to IRQ-handling functions
  *
  * Whenever you write a IRQ-handling function it has to match this signature.
@@ -71,7 +85,7 @@ int irq_uninstall_handler(unsigned int irq);
  *
  * @return Just returns 0 in any case
  */
-int irq_init(void);
+static inline int irq_init(void) { return 0; }
 
 /** @brief reset the counters of the received interrupts
  */
@@ -85,7 +99,7 @@ void print_irq_stats(void);
  *
  * @return 0 on success
  */
-int enable_dynticks(void);
+inline static int enable_dynticks(void) { return 0; }
 
 #ifdef __cplusplus
 }

@@ -26,8 +26,39 @@
  */
 
 #include <hermit/stdlib.h>
+#include <hermit/stdio.h>
+#include <hermit/logging.h>
+#include <asm/processor.h>
+
+extern uint32_t cpu_freq;
 
 uint32_t get_cpu_frequency(void)
 {
+	return cpu_freq;
+}
+
+int cpu_detection(void)
+{
+	LOG_INFO("HermitCore runs in exception level %d\n", get_current_el());
+	LOG_INFO("System control register: 0x%x\n", get_sctlr());
+
+#if 0
+	uint32_t value = 0;
+
+	LOG_INFO("Enable performance counter\n");
+
+	/* Enable Performance Counter */
+	asm volatile("mrs %0, pmcr_el0" : "=r" (value));
+	value |= ARMV8_PMCR_E; /* Enable */
+	value |= ARMV8_PMCR_C; /* Cycle counter reset */
+	value |= ARMV8_PMCR_P; /* Reset all counters */
+	asm volatile("msr pmcr_el0, %0" : : "r" (value));
+
+	/* Enable cycle counter register */
+	asm volatile("mrs %0, pmcntenset_el0" : "=r" (value));
+	value |= ARMV8_PMCNTENSET_EL0_EN;
+	asm volatile("msr pmcntenset_el0, %0" : : "r" (value));
+#endif
+
 	return 0;
 }

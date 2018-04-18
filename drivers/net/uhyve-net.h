@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2017, Stefan Lankes, RWTH Aachen University
- * All rights reserved.
+ * Copyright 2017 RWTH Aachen University
+ * Author(s): Tim van de Kamp <tim.van.de.kamp@rwth-aachen.de>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -23,31 +23,68 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * This code based mostly on the online manual http://www.lowlevel.eu/wiki/RTL8139
  */
 
-/**
- * @author Stefan Lankes
- * @file arch/arm64/include/asm/string.h
- * @brief Time related functions
+#ifndef __NET_UHYVE_NET_H__
+#define __NET_UHYVE_NET_H__
+
+#include <hermit/stddef.h>
+#include <hermit/spinlock.h>
+
+#define MIN(a, b)	(a) < (b) ? (a) : (b)
+
+#define RX_BUF_LEN 2048
+#define TX_BUF_LEN 2048
+#define TX_BUF_NUM 1		//number of tx buffer
+
+// UHYVE_PORT_NETINFO
+typedef struct {
+        /* OUT */
+        char mac_str[18];
+} __attribute__((packed)) uhyve_netinfo_t;
+
+// UHYVE_PORT_NETWRITE
+typedef struct {
+        /* IN */
+        const void* data;
+        size_t len;
+        /* OUT */
+        int ret;
+} __attribute__((packed)) uhyve_netwrite_t;
+
+// UHYVE_PORT_NETREAD
+typedef struct {
+        /* IN */
+        void* data;
+        /* IN / OUT */
+        size_t len;
+        /* OUT */
+        int ret;
+} __attribute__((packed)) uhyve_netread_t;
+
+// UHYVE_PORT_NETSTAT
+typedef struct {
+        /* IN */
+        int status;
+} __attribute__((packed)) uhyve_netstat_t;
+
+/*
+ * Helper struct to hold private data used to operate your ethernet interface.
  */
+// NETIF state struct
+typedef struct uhyve_netif {
+	struct eth_addr *ethaddr;
+	/* Add whatever per-interface state that is needed here. */
+	uint8_t* tx_buf[TX_BUF_NUM];
+	uint32_t tx_queue;
+	uint32_t tx_complete;
+	uint8_t tx_inuse[TX_BUF_NUM];
+	uint8_t* rx_buf;
+} uhyve_netif_t;
 
-#ifndef __ARCH_TIME_H__
-#define __ARCH_TIME_H__
-
-#include <asm/stddef.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-int timer_deadline(uint32_t t);
-
-void timer_disable(void);
-
-int timer_is_running(void);
-
-#ifdef __cplusplus
-}
-#endif
+err_t uhyve_netif_init(struct netif* netif);
+int uhyve_net_stat(void);
 
 #endif

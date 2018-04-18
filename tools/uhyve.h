@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Stefan Lankes, RWTH Aachen University
+ * Copyright (c) 2018, Stefan Lankes, RWTH Aachen University
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,29 +25,46 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/**
- * @author Stefan Lankes
- * @file arch/arm64/include/asm/string.h
- * @brief Time related functions
- */
+#ifndef __UHYVE_H__
+#define __UHYVE_H__
 
-#ifndef __ARCH_TIME_H__
-#define __ARCH_TIME_H__
+#include <err.h>
 
-#include <asm/stddef.h>
+#define UHYVE_PORT_WRITE		0x400
+#define UHYVE_PORT_OPEN			0x440
+#define UHYVE_PORT_CLOSE		0x480
+#define UHYVE_PORT_READ			0x500
+#define UHYVE_PORT_EXIT			0x540
+#define UHYVE_PORT_LSEEK		0x580
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+// Networkports
+#define UHYVE_PORT_NETINFO              0x600
+#define UHYVE_PORT_NETWRITE             0x640
+#define UHYVE_PORT_NETREAD              0x680
+#define UHYVE_PORT_NETSTAT              0x700
 
-int timer_deadline(uint32_t t);
+/* Ports and data structures for uhyve command line arguments and envp
+ * forwarding */
+#define UHYVE_PORT_CMDSIZE		0x740
+#define UHYVE_PORT_CMDVAL		0x780
 
-void timer_disable(void);
+#define UHYVE_IRQ       11
 
-int timer_is_running(void);
+#define kvm_ioctl(fd, cmd, arg) ({ \
+        const int ret = ioctl(fd, cmd, arg); \
+        if(ret == -1) \
+                err(1, "KVM: ioctl " #cmd " failed"); \
+        ret; \
+        })
 
-#ifdef __cplusplus
-}
-#endif
+void print_registers(void);
+void timer_handler(int signum);
+void restore_cpu_state(void);
+void save_cpu_state(void);
+void init_cpu_state(uint64_t elf_entry);
+int load_kernel(uint8_t* mem, char* path);
+int load_checkpoint(uint8_t* mem, char* path);
+void init_kvm_arch(void);
+int load_kernel(uint8_t* mem, char* path);
 
 #endif
