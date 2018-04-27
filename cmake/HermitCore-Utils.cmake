@@ -42,7 +42,7 @@ function(find_toolchain_program NAME)
 
     find_program(${VARNAME}
         NAMES ${_CMAKE_TOOLCHAIN_PREFIX}${NAME_LOWER}
-        HINTS ${TOOLCHAIN_BIN_DIR})
+	HINTS ${HERMIT_PREFIX}/bin)
 
     if(NOT ${VARNAME})
         message(FATAL_ERROR
@@ -101,6 +101,7 @@ function(build_external NAME PATH DEPENDS)
 			-DCMAKE_EXPORT_COMPILE_COMMANDS=true
 			-DMAX_ARGC_ENVC=${MAX_ARGC_ENVC}
 			--no-warn-unused-cli
+			-target aarch64-hermit
 			${DO_PROFILING}
 			${CMD_VARS}
 			${ARGN})

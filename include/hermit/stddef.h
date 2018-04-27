@@ -57,7 +57,7 @@ extern size_t image_size;
 
 #define BYTE_ORDER             LITTLE_ENDIAN
 
-#define DYNAMIC_TICKS
+//#define DYNAMIC_TICKS
 
 #define UHYVE_PORT_WRITE		0x400
 #define UHYVE_PORT_OPEN			0x440

@@ -155,7 +155,7 @@ static void close_fd(int* fd)
 
 static void uhyve_exit(void* arg)
 {
-	//print_registers();
+	print_registers();
 
 	if (pthread_mutex_trylock(&kvm_lock))
 	{
