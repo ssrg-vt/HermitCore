@@ -59,6 +59,15 @@ extern int32_t isle;
 extern int32_t possible_isles;
 extern volatile int libc_sd;
 
+void* sys_stackaddr(void) {
+        task_t* task = per_core(current_task);
+        return task->stack;
+}
+
+size_t sys_stacksize(void) {
+        return DEFAULT_STACK_SIZE;
+}
+
 static inline int socket_send(int fd, const 	void* buf, size_t len)
 {
 	int ret, sz = 0;

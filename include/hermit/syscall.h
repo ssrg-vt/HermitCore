@@ -64,6 +64,8 @@ typedef void (*signal_handler_t)(int);
  * => classical system calls are realized as normal function
  * => forward declaration of system calls as function
  */
+void* sys_stackaddr(void);
+size_t sys_stacksize(void);
 tid_t sys_getpid(void);
 int sys_fork(void);
 int sys_wait(int* status);
