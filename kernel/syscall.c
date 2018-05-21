@@ -169,6 +169,45 @@ typedef struct {
 	ssize_t ret;
 } __attribute__((packed)) uhyve_read_t;
 
+/* Pages belonging to the heap are mapped on demand, and are not always
+ * contiguous in physical memory. Thus, we need to force allocation and call
+ * the hypervisor file read function page by page.
+ */
+ssize_t uhyve_noncontiguous_read(int fd, char *buf, size_t len) {
+	ssize_t bytes_read = 0;
+	size_t cur_len = 0;
+	uhyve_read_t arg = {fd, 0x0, 0x0, -1};
+
+	while(len) {
+
+		if(!((size_t)buf % PAGE_SIZE)) {
+			cur_len = (len < PAGE_SIZE) ? len : PAGE_SIZE;
+		} else {
+			cur_len = PAGE_CEIL((size_t)buf) - (size_t)buf;
+		}
+
+		/* Force mapping */
+		memset(buf, 0x0, 1);
+
+		arg.buf = (char *)virt_to_phys((size_t)buf);
+		arg.len = cur_len;
+		arg.ret = -1;
+		uhyve_send(UHYVE_PORT_READ, (unsigned)virt_to_phys((size_t)&arg));
+
+		if(arg.ret < 0)
+			return arg.ret;
+
+		bytes_read += arg.ret;
+		if(arg.ret != cur_len)
+			break;
+
+		buf += cur_len;
+		len -= cur_len;
+	}
+
+	return bytes_read;
+}
+
 ssize_t sys_read(int fd, char* buf, size_t len)
 {
 	sys_read_t sysargs = {__NR_read, fd, len};
@@ -184,11 +223,15 @@ ssize_t sys_read(int fd, char* buf, size_t len)
 	}
 
 	if (is_uhyve()) {
+
+		return uhyve_noncontiguous_read(fd, buf, len);
+#if 0
 		uhyve_read_t uhyve_args = {fd, (char*) virt_to_phys((size_t) buf), len, -1};
 
 		uhyve_send(UHYVE_PORT_READ, (unsigned)virt_to_phys((size_t)&uhyve_args));
 
 		return uhyve_args.ret;
+#endif
 	}
 
 	spinlock_irqsave_lock(&lwip_lock);
