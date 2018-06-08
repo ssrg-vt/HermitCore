@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.7)
 project(hermit_tools)
 
 include(../cmake/HermitCore-Paths.cmake)
-
+SET(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
 add_compile_options(-std=c99)
 
 add_executable(proxy proxy.c utils.c uhyve.c uhyve-net.c uhyve-x86_64.c uhyve-aarch64.c)
