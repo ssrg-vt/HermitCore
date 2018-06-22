@@ -553,7 +553,6 @@ int create_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio, uint32_t c
 		return -EINVAL;
 
 	stack = create_stack(DEFAULT_STACK_SIZE);
-	LOG_INFO("Stack = %p\n", stack);
 	if (BUILTIN_EXPECT(!stack, 0))
 		return -ENOMEM;
 

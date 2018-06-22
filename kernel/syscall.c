@@ -61,7 +61,6 @@ extern volatile int libc_sd;
 
 void* sys_stackaddr(void) {
         task_t* task = per_core(current_task);
-	LOG_INFO("task->stack = %p\n", task->stack);
         return task->stack;
 }
 
