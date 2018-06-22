@@ -34,7 +34,7 @@
 #define MAIR(attr, mt)  ((attr) << ((mt) * 8))
 
 #define PAGE_SHIFT	12
-#define PAGE_SIZE	(1 << PAGE_SHIFT)
+#define PAGE_SIZE	4096	
 #define PAGE_MASK	(~(PAGE_SIZE-1))
 
 /*
@@ -95,22 +95,22 @@ base: .quad 0
 .global limit
 limit: .quad 0
 .global cpu_freq
-cpu_freq: .dword 0
+cpu_freq: .xword 0
 .global boot_processor
-boot_processor: .dword 0
+boot_processor: .xword 0
 .global cpu_online
-cpu_online: .dword 0
+cpu_online: .xword 0
 .global possible_cpus
-possible_cpus: .dword 0
+possible_cpus: .xword 0
 .global current_boot_id
-current_boot_id: .dword 0
-isle: .dword -1
+current_boot_id: .xword 0
+isle: .xword -1
 .global possible_isles
-possible_isles: .dword 1
+possible_isles: .xword 1
 .global uhyve
-uhyve: .dword 0
+uhyve: .xword 0
 .global single_kernel
-single_kernel: .dword 1
+single_kernel: .xword 1
 .global image_size
 image_size: .quad 0
 
@@ -124,7 +124,7 @@ hcmask: .byte 255,255,255,0
 host_logical_addr: .quad 0
 
 .global uart_mmio
-uart_mmio: .dword 0
+uart_mmio: .xword 0
 
 start64:
   //mrs x0, s3_1_c15_c3_0 // Read EL1 Configuration Base Address Register

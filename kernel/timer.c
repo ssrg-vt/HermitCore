@@ -26,6 +26,7 @@
  */
 
 #include <hermit/stdlib.h>
+#include <hermit/logging.h>
 
 struct itimerval;
 

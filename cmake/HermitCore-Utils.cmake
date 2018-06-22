@@ -42,7 +42,7 @@ function(find_toolchain_program NAME)
 
     find_program(${VARNAME}
         NAMES ${_CMAKE_TOOLCHAIN_PREFIX}${NAME_LOWER}
-        HINTS ${TOOLCHAIN_BIN_DIR})
+        HINTS ${HERMIT_PREFIX}/bin)
 
     if(NOT ${VARNAME})
         message(FATAL_ERROR
