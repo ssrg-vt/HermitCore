@@ -154,7 +154,7 @@ build_external(tools ${HERMIT_ROOT}/tools "")
 
 if("${TARGET_ARCH}" STREQUAL "x86_64-hermit")
 
-build_external(arch_x86_loader ${HERMIT_ROOT}/arch/x86/loader "")
+#build_external(arch_x86_loader ${HERMIT_ROOT}/arch/x86/loader "")
 
 ## Intel's OpenMP runtime for x86 (libomp)
 build_external(libiomp ${HERMIT_ROOT}/usr/libomp ""
@@ -167,22 +167,22 @@ build_external(libiomp ${HERMIT_ROOT}/usr/libomp ""
 add_dependencies(hermit libiomp)
 
 ## iRCCE
-build_external(ircce ${HERMIT_ROOT}/usr/ircce "")
-add_dependencies(hermit ircce)
+#build_external(ircce ${HERMIT_ROOT}/usr/ircce "")
+#add_dependencies(hermit ircce)
 
 ## XRay profiler
-build_external(xray ${HERMIT_ROOT}/usr/xray "")
-add_dependencies(hermit xray)
+#build_external(xray ${HERMIT_ROOT}/usr/xray "")
+#add_dependencies(hermit xray)
 
 ## end of x86 specific part
 endif()
 
 ## Tests and benchmarks
-if("${TARGET_ARCH}" STREQUAL "x86_64-hermit")
-build_external(tests ${HERMIT_ROOT}/usr/tests hermit)
-build_external(benchmarks ${HERMIT_ROOT}/usr/benchmarks hermit)
-build_external(openmpbench ${HERMIT_ROOT}/usr/openmpbench hermit)
-endif()
+#if("${TARGET_ARCH}" STREQUAL "x86_64-hermit")
+#build_external(tests ${HERMIT_ROOT}/usr/tests hermit)
+#build_external(benchmarks ${HERMIT_ROOT}/usr/benchmarks hermit)
+#build_external(openmpbench ${HERMIT_ROOT}/usr/openmpbench hermit)
+#endif()
 
 ## relocate the local prefix to our install destination
 install(DIRECTORY ${LOCAL_PREFIX_DIR}/

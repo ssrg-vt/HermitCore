@@ -7,7 +7,7 @@ set_default(COMPILER_BIN_DIR ${HERMIT_PREFIX}/usr/local/bin)
 
 set(TARGET_ARCH aarch64-hermit)
 set(HERMIT_KERNEL_FLAGS
-					-Wall -g -O0 -fno-builtin -mgeneral-regs-only
+					-Wall -O2 -mgeneral-regs-only
 					-fomit-frame-pointer -finline-functions -ffreestanding
 					-nostdinc -fno-stack-protector
 					-falign-jumps=1 -falign-loops=1
@@ -16,7 +16,7 @@ set(HERMIT_KERNEL_FLAGS
 					-fno-strict-overflow -target aarch64-hermit)
 
 set(HERMIT_APP_FLAGS
-					-g -O0 -fno-builtin -ftree-vectorize -target aarch64-hermit -fopenmp=libgomp)
+					-O2 -ftree-vectorize -target aarch64-hermit -fopenmp=libgomp)
 
 set(CMAKE_SYSTEM_NAME Generic)
 
