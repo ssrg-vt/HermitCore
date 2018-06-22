@@ -11,10 +11,10 @@ target_compile_options(proxy PUBLIC -DMAX_ARGC_ENVC=${MAX_ARGC_ENVC})
 target_link_libraries(proxy -pthread)
 
 install(TARGETS proxy
-	DESTINATION bin)
+	DESTINATION aarch64-hermit/bin)
 
 install(FILES init.sh
-	DESTINATION tools)
+	DESTINATION aarch64-hermit/tools)
 
 # Show include files in IDE
 file(GLOB_RECURSE TOOLS_INCLUDES "*.h")
