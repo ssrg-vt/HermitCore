@@ -1,4 +1,3 @@
-M	arch/x86/CMakeLists.txt
 M	arch/x86/include/asm/gdt.h
 M	arch/x86/include/asm/page.h
 M	arch/x86/include/asm/processor.h
@@ -20,13 +19,6 @@ M	cmake/HermitCore-Toolchain-x86-bootstrap.cmake
 M	cmake/HermitCore-Toolchain-x86.cmake
 M	cmake/HermitCore-Utils.cmake
 M	cmake/HermitCore.cmake
-M	drivers/net/e1000.c
-M	drivers/net/mmnif.c
-M	drivers/net/uhyve-net.c
-M	drivers/net/uhyve-net.h
-M	include/hermit/config.h.in
-M	include/hermit/ctype.h
-M	include/hermit/logging.h
 M	include/hermit/memory.h
 D	include/hermit/migration-chkpt.h
 D	include/hermit/migration-fd.h
@@ -54,7 +46,6 @@ M	libkern/stdio.c
 D	local-cmake.sh
 M	lwip
 M	mm/vma.c
-M	tests.sh
 M	tools/CMakeLists.txt
 M	tools/proxy.c
 M	tools/proxy.h

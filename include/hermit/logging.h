@@ -32,7 +32,9 @@
 #include <hermit/syscall.h>
 #include <hermit/stddef.h>
 
-enum {
+int kprintf(const char *fmt, ...);
+
+	enum {
 	LOG_LEVEL_DISABLED = 0,
 	LOG_LEVEL_ERROR,
 	LOG_LEVEL_WARNING,
@@ -61,7 +63,7 @@ enum {
 
 // [timestamp][core:task][level] ...
 #define __LOG_FORMAT_VERBOSE(level, fmt, ...) \
-	"[%d.%03d][%d:%d][" CONC(level, PREFIX) "] " fmt, \
+	"[%d.%03d][%d:%02d][" CONC(level, PREFIX) "] " fmt, \
 	(get_uptime() / 1000), (get_uptime() % 1000), \
 	CORE_ID, sys_getpid(), \
 	##__VA_ARGS__
