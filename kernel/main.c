@@ -78,7 +78,9 @@ typedef struct {
 	char **envp;
 } __attribute__ ((packed)) uhyve_cmdval_t;
 
+#ifdef __x86_64__
 static struct netif	default_netif;
+#endif
 static const int sobufsize = 131072;
 
 /*
@@ -135,6 +137,7 @@ static int hermit_init(void)
 	return 0;
 }
 
+#ifdef __x86_64__
 static void tcpip_init_done(void* arg)
 {
 	sys_sem_t* sem = (sys_sem_t*)arg;
@@ -143,7 +146,9 @@ static void tcpip_init_done(void* arg)
 
 	sys_sem_signal(sem);
 }
+#endif
 
+#ifdef __x86_64__
 static int init_netifs(void)
 {
 	ip_addr_t	ipaddr;
@@ -271,6 +276,7 @@ success:
 
 	return 0;
 }
+#endif /* __x86_64__ */
 
 int network_shutdown(void)
 {
@@ -424,7 +430,7 @@ static int initd(void* arg)
 
 	s = lwip_socket(AF_INET6, SOCK_STREAM , 0);
 	if (s < 0) {
-		LOG_ERROR("socket failed: %d\n", server);
+		LOG_ERROR("socket failed: %d\n", s);
 		return -1;
 	}
 

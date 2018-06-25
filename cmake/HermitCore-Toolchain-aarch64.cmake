@@ -5,15 +5,18 @@ include_guard()
 set_default(HERMIT_PREFIX /opt/hermit)
 set_default(COMPILER_BIN_DIR ${HERMIT_PREFIX}/usr/local/bin)
 
+# Flags not supported by clang/llvm: -finline-functions -falign-jumps=1
+# -falign-loops=1
 set(TARGET_ARCH aarch64-hermit)
 set(HERMIT_KERNEL_FLAGS
 					-Wall -O2 -mgeneral-regs-only
-					-fomit-frame-pointer -finline-functions -ffreestanding
+					-fomit-frame-pointer -ffreestanding
 					-nostdinc -fno-stack-protector
-					-falign-jumps=1 -falign-loops=1
-					-fno-common -Wframe-larger-than=1024
+					-fno-common -Wframe-larger-than=2048
 					-fno-strict-aliasing -fno-asynchronous-unwind-tables
-					-fno-strict-overflow -target aarch64-hermit)
+					-fno-strict-overflow -target aarch64-hermit
+					-Wno-asm-operand-widths
+					-Wno-shift-negative-value)
 
 set(HERMIT_APP_FLAGS
 					-O2 -ftree-vectorize -target aarch64-hermit -fopenmp=libgomp)
