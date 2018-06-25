@@ -72,6 +72,7 @@ DEFINE_PER_CORE(task_t*, current_task, task_table+0);
 DEFINE_PER_CORE(uint32_t, __core_id, 0);
 #endif
 
+#ifdef __x86_64__
 static void update_timer(task_t* first)
 {
 	if(first) {
@@ -86,6 +87,7 @@ static void update_timer(task_t* first)
 		timer_disable();
 	}
 }
+#endif
 
 
 static void timer_queue_remove(uint32_t core_id, task_t* task)
