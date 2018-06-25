@@ -79,14 +79,14 @@ inline static size_t get_hbmem_size(void) {
 static inline uint32_t get_isr(void)
 {
 	uint32_t status;
-	asm volatile("mrs %0, isr_el1" : "=r"(status));
+	asm volatile("mrs %w0, isr_el1" : "=r"(status));
 	return status;
 }
 
 static inline uint32_t get_sctlr(void)
 {
 	uint32_t status;
-	asm volatile("mrs %0, sctlr_el1" : "=r"(status));
+	asm volatile("mrs %w0, sctlr_el1" : "=r"(status));
 	return status;
 }
 
@@ -98,7 +98,7 @@ static inline uint32_t get_sctlr(void)
 static inline uint32_t get_current_el(void)
 {
 	uint32_t curr;
-	asm volatile("mrs %0, CurrentEL" : "=r"(curr));
+	asm volatile("mrs %w0, CurrentEL" : "=r"(curr));
 	return (curr>>2) & 0x3;
 }
 
@@ -283,25 +283,25 @@ static inline size_t msb(size_t i) {
 static inline uint32_t get_cntfrq(void)
 {
 	uint32_t val;
-	asm volatile("mrs %0, cntfrq_el0" : "=r" (val) :: "memory");
+	asm volatile("mrs %w0, cntfrq_el0" : "=r" (val) :: "memory");
 	return val;
 }
 
 static inline void set_cntfrq(uint32_t value)
 {
-	asm volatile("msr cntfrq_el0, %0" :: "r"(value) : "memory");
+	asm volatile("msr cntfrq_el0, %w0" :: "r"(value) : "memory");
 }
 
 static inline uint32_t get_cntkctl(void)
 {
 	uint32_t value;
-	asm volatile("mrs %0, cntkctl_el1" : "=r" (value) :: "memory");
+	asm volatile("mrs %w0, cntkctl_el1" : "=r" (value) :: "memory");
 	return value;
 }
 
 static inline void set_cntkctl(uint32_t value)
 {
-	asm volatile("msr cntkctl_el1, %0" :: "r" (value) : "memory");
+	asm volatile("msr cntkctl_el1, %w0" :: "r" (value) : "memory");
 }
 
 static inline void set_cntp_cval(uint64_t value)
@@ -330,13 +330,13 @@ static inline uint64_t get_cntp_tval(void)
 
 static inline void set_cntp_ctl(uint32_t value)
 {
-	asm volatile("msr cntp_ctl_el0, %0" :: "r"(value) : "memory");
+	asm volatile("msr cntp_ctl_el0, %w0" :: "r"(value) : "memory");
 }
 
 static inline uint32_t get_cntp_ctl(void)
 {
 	uint32_t value;
-	asm volatile("mrs %0, cntp_ctl_el0" : "=r" (value) :: "memory");
+	asm volatile("mrs %w0, cntp_ctl_el0" : "=r" (value) :: "memory");
 	return value;
 }
 
@@ -373,13 +373,13 @@ static inline uint64_t get_cntv_tval(void)
 
 static inline void set_cntv_ctl(uint32_t value)
 {
-	asm volatile("msr cntv_ctl_el0, %0" :: "r"(value) : "memory");
+	asm volatile("msr cntv_ctl_el0, %w0" :: "r"(value) : "memory");
 }
 
 static inline uint32_t get_cntv_ctl(void)
 {
 	uint32_t value;
-	asm volatile("mrs %0, cntv_ctl_el0" : "=r" (value) :: "memory");
+	asm volatile("mrs %w0, cntv_ctl_el0" : "=r" (value) :: "memory");
 	return value;
 }
 
