@@ -1,6 +1,3 @@
-M	.bintray_descriptor.json
-M	.gitignore
-M	.gitmodules
 M	CMakeLists.txt
 A	arch/aarch64/CMakeLists.txt
 A	arch/aarch64/include/asm/atomic.h
