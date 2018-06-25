@@ -449,6 +449,14 @@ int load_kernel(uint8_t* mem, char* path)
 			}
 
 			*((uint64_t*) (mem+paddr-GUEST_OFFSET + 0xbc)) = (uint64_t) guest_mem;
+
+			/* migration TODO:
+			 * - should_migrate is at 0x174
+			 * - migrate_resume is at 0x17C
+			 * - boot_gtod is at 0x184
+			 * - forwarded_tls_size is at 0x18C
+			 */
+
 		}
 		*((uint64_t*) (mem+paddr-GUEST_OFFSET + 0x158)) += memsz; // total kernel size
 	}

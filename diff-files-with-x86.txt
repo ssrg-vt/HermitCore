@@ -1,5 +1,3 @@
-M	arch/x86/kernel/apic.c
-M	arch/x86/kernel/entry.asm
 M	arch/x86/kernel/processor.c
 M	arch/x86/kernel/tasks.c
 M	arch/x86/loader/page.c

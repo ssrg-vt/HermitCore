@@ -123,6 +123,16 @@ hcmask: .byte 255,255,255,0
 .global host_logical_addr
 host_logical_addr: .quad 0
 
+.global should_migrate
+should_migrate: .xword 0
+.global mig_resuming
+mig_resuming: .xword 0
+.global boot_gtod
+boot_gtod: .quad 0
+// FIXME do we really need the forwarded tls size?
+.global forwarded_tls_size
+forwarded_tls_size: .quad 0
+
 start64:
   //mrs x0, s3_1_c15_c3_0 // Read EL1 Configuration Base Address Register
 
