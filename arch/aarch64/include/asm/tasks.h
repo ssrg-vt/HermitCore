@@ -43,6 +43,9 @@
 extern "C" {
 #endif
 
+/* we need this in the migration code */
+int init_tls(void);
+
 /** @brief Setup a default frame for a new task
  *
  * @param task Pointer to the task structure
@@ -54,6 +57,8 @@ extern "C" {
  * - -EINVAL (-22) on failure
  */
 int create_default_frame(task_t* task, entry_point_t ep, void* arg, uint32_t core_id);
+int create_resume_frame(task_t* task, entry_point_t ep, void* arg,
+		uint32_t core_id, uint64_t stack_offset);
 
 /** @brief Jump to user code
  *

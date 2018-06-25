@@ -131,6 +131,10 @@ size_t virt_to_phys(size_t vir);
  */
 int page_init(void);
 
+/* Migration code needs access to this function when migrating the heap: we
+ * currently force allocation of all heap pages that are not mapped */
+int check_pagetables(size_t addr);
+
 /** @brief Map a continuous region of pages
  *
  * @param viraddr Desired virtual address

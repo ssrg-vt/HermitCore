@@ -49,7 +49,7 @@ extern atomic_int32_t cpu_online;
 static char tls[16][DEFAULT_STACK_SIZE];
 static int id = 0;
 
-static int init_tls(void)
+int init_tls(void)
 {
 	task_t* curr_task = per_core(current_task);
 

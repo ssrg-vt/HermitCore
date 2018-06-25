@@ -1,11 +1,5 @@
-M	arch/x86/include/asm/gdt.h
-M	arch/x86/include/asm/page.h
-M	arch/x86/include/asm/processor.h
-M	arch/x86/include/asm/stddef.h
-M	arch/x86/include/asm/tasks.h
 M	arch/x86/kernel/apic.c
 M	arch/x86/kernel/entry.asm
-M	arch/x86/kernel/gdt.c
 M	arch/x86/kernel/processor.c
 M	arch/x86/kernel/tasks.c
 M	arch/x86/loader/page.c
