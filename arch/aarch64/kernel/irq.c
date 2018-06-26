@@ -281,11 +281,13 @@ void do_sync(void *regs)
 		if (!(iss & (1 << 10))) {
 			/* read far_el1 register, which holds the faulting virtual address */
 			uint64_t far = read_far();
+			uint64_t pc = read_elr_el1();
 
-			if (page_fault_handler(far) == 0)
+			if (page_fault_handler(far, pc) == 0)
 				return;
 
-			LOG_ERROR("Unable to handle page fault at 0x%llx\n", far);
+			LOG_ERROR("Unable to handle page fault at 0x%llx (PC @0x%llx)\n",
+					far, pc);
 
 			// send EOI
 			gicc_write(GICC_EOIR, iar);

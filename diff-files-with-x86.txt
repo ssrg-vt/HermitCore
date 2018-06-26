@@ -1,8 +1,5 @@
-M	arch/x86/kernel/processor.c
-M	arch/x86/kernel/tasks.c
-M	arch/x86/loader/page.c
-M	arch/x86/mm/memory.c
-M	arch/x86/mm/page.c
+M	arch/x86/kernel/tasks.c:
+  - implement create_resume_frame for aarch64
 M	cmake/HermitCore-Configuration.cmake
 M	cmake/HermitCore-Paths.cmake
 A	cmake/HermitCore-Toolchain-aarch64-bootstrap.cmake

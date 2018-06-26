@@ -108,25 +108,29 @@ void print_registers(void)
 	reg.addr = (uint64_t)&data;
 	reg.id = ARM64_CORE_REG(regs.pc);
 	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
-	fprintf(stderr, " PC:     0x%016lx\n", data);
+	fprintf(stderr, " PC:      0x%016lx\n", data);
 
 	reg.id = ARM64_CORE_REG(regs.pstate);
 	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
-	fprintf(stderr, " PSTATE: 0x%016lx\n", data);
+	fprintf(stderr, " PSTATE:  0x%016lx\n", data);
 
 	reg.id = ARM64_CORE_REG(sp_el1);
 	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
-	fprintf(stderr, " SP_EL1: 0x%016lx\n", data);
+	fprintf(stderr, " SP_EL1:  0x%016lx\n", data);
 
 	reg.id = ARM64_CORE_REG(regs.regs[30]);
 	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
-	fprintf(stderr, " LR:     0x%016lx\n", data);
+	fprintf(stderr, " LR:      0x%016lx\n", data);
+
+	reg.id = ARM64_CORE_REG(elr_el1);
+	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
+	fprintf(stderr, " ELR_LR1: 0x%016lx\n", data);
 
 	for(int i=0; i<=29; i+=2)
 	{
 		reg.id = ARM64_CORE_REG(regs.regs[i]);
 		kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
-		fprintf(stderr, " X%d:\t 0x%016lx\t", i, data);
+		fprintf(stderr, " X%d:\t  0x%016lx\t", i, data);
 
 		reg.id = ARM64_CORE_REG(regs.regs[i+1]);
 		kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
