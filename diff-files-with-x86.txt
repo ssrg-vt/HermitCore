@@ -28,9 +28,6 @@ M	kernel/syscall.c
 M	kernel/tasks.c
 M	kernel/timer.c
 D	kernel/umalloc.c
-M	libkern/printf.c
-M	libkern/stdio.c
-D	local-cmake.sh
 M	lwip
 M	mm/vma.c
 M	tools/CMakeLists.txt
