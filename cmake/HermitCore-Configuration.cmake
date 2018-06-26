@@ -1,10 +1,10 @@
 set(PACKAGE_VERSION "0.2.6" CACHE STRING
 	"HermitCore current version")
 
-set(MAX_CORES "512" CACHE STRING
+set(MAX_CORES "16" CACHE STRING
 	"Maximum number of cores that can be managed")
 
-set(MAX_TASKS "((MAX_CORES * 2) + 2)" CACHE STRING
+set(MAX_TASKS "32" CACHE STRING
 	"Maximum number of tasks")
 
 set(MAX_ISLE "8" CACHE STRING
@@ -46,3 +46,6 @@ set(HAVE_ARCH_STRCPY  "0" CACHE STRING
 set(HAVE_ARCH_STRNCPY "0" CACHE STRING
 	"Use machine specific version of strncpy")
 endif()
+
+option(KERNEL_DEBUG "Compile the kernel with -g and -O0"  OFF)
+option(MIGRATION_LOG "Enable migration events logging"  OFF)
