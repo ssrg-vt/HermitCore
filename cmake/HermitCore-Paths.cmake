@@ -9,7 +9,8 @@ set(HERMIT_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 if(${CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT})
 	# See CMake docs for reference:
 	# https://cmake.org/cmake/help/v3.7/variable/CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT.html
-	set(CMAKE_INSTALL_PREFIX /opt/hermit CACHE PATH "..." FORCE)
+	# set(CMAKE_INSTALL_PREFIX /opt/hermit CACHE PATH "..." FORCE)
+	message( FATAL_ERROR "Please specify CMAKE_INSTALL_PREFIX")
 endif()
 
 # we install 3rd party libraries to an intermediate directory and relocate
