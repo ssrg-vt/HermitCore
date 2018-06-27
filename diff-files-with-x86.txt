@@ -1,6 +1,5 @@
 M	arch/x86/kernel/tasks.c:
   - implement create_resume_frame for aarch64
-M	include/hermit/memory.h
 D	include/hermit/migration-chkpt.h
 D	include/hermit/migration-fd.h
 D	include/hermit/migration-x86-regs.h
@@ -9,7 +8,6 @@ M	include/hermit/spinlock.h
 D	include/hermit/stack_slots.h
 M	include/hermit/stddef.h
 M	include/hermit/tasks.h
-D	include/hermit/umalloc.h
 M	include/hermit/virtio_pci.h
 M	include/hermit/virtio_types.h
 D	kernel/gettimeofday.c
@@ -21,7 +19,6 @@ D	kernel/stack_slots.c
 M	kernel/syscall.c
 M	kernel/tasks.c
 M	kernel/timer.c
-D	kernel/umalloc.c
 M	lwip
 M	mm/vma.c
 M	tools/CMakeLists.txt

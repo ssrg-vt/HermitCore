@@ -502,13 +502,13 @@ int sys_spinlock_init(spinlock_t** lock)
 	if (BUILTIN_EXPECT(!lock, 0))
 		return -EINVAL;
 
-	*lock = (spinlock_t*) kmalloc(sizeof(spinlock_t));
+	*lock = (spinlock_t*) umalloc(sizeof(spinlock_t));
 	if (BUILTIN_EXPECT(!(*lock), 0))
 		return -ENOMEM;
 
 	ret = spinlock_init(*lock);
 	if (ret) {
-		kfree(*lock);
+		ufree(*lock);
 		*lock = NULL;
 	}
 
@@ -524,7 +524,7 @@ int sys_spinlock_destroy(spinlock_t* lock)
 
 	ret = spinlock_destroy(lock);
 	if (!ret)
-		kfree(lock);
+		ufree(lock);
 
 	return ret;
 }
@@ -560,13 +560,13 @@ int sys_sem_init(sem_t** sem, unsigned int value)
 	if (BUILTIN_EXPECT(!sem, 0))
 		return -EINVAL;
 
-	*sem = (sem_t*) kmalloc(sizeof(sem_t));
+	*sem = (sem_t*) umalloc(sizeof(sem_t));
 	if (BUILTIN_EXPECT(!(*sem), 0))
 		return -ENOMEM;
 
 	ret = sem_init(*sem, value);
 	if (ret) {
-		kfree(*sem);
+		ufree(*sem);
 		*sem = NULL;
 	}
 
@@ -582,7 +582,7 @@ int sys_sem_destroy(sem_t* sem)
 
 	ret = sem_destroy(sem);
 	if (!ret)
-		kfree(sem);
+		ufree(sem);
 
 	return ret;
 }
