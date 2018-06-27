@@ -37,7 +37,7 @@
  */
 
 #ifndef __VIRTIO_PCI_H
-#define __VIRTIO_PCI_Hq
+#define __VIRTIO_PCI_H
 
 #include <hermit/stdlib.h>
 #include <hermit/virtio_types.h>

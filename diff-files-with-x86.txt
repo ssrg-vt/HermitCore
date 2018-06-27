@@ -4,12 +4,9 @@ D	include/hermit/migration-chkpt.h
 D	include/hermit/migration-fd.h
 D	include/hermit/migration-x86-regs.h
 D	include/hermit/migration.h
-M	include/hermit/spinlock.h
 D	include/hermit/stack_slots.h
 M	include/hermit/stddef.h
 M	include/hermit/tasks.h
-M	include/hermit/virtio_pci.h
-M	include/hermit/virtio_types.h
 D	kernel/gettimeofday.c
 M	kernel/main.c
 D	kernel/migration-chkpt.c
@@ -19,7 +16,6 @@ D	kernel/stack_slots.c
 M	kernel/syscall.c
 M	kernel/tasks.c
 M	kernel/timer.c
-M	lwip
 M	mm/vma.c
 M	tools/CMakeLists.txt
 M	tools/proxy.c
@@ -38,8 +34,3 @@ R100	tools/uhyve-cpu.h	tools/uhyve-x86_64.h
 M	tools/uhyve.c
 M	tools/uhyve.h
 M	tools/utils.c
-M	usr/benchmarks/CMakeLists.txt
-M	usr/libomp
-M	usr/tests/CMakeLists.txt
-A	usr/tests/argv_envp.c
-M	usr/tests/hello.c
