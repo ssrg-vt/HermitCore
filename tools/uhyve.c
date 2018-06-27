@@ -66,6 +66,7 @@
 #include "uhyve-syscalls.h"
 #include "uhyve-net.h"
 #include "proxy.h"
+#include "uhyve-migration.h"
 
 static bool restart = false;
 static pthread_t net_thread;
@@ -644,6 +645,17 @@ int uhyve_loop(int argc, char **argv)
 {
 	const char* hermit_check = getenv("HERMIT_CHECKPOINT");
 	int ts = 0, i = 0;
+
+	/* Pierre: migration stuff */
+	if (register_migration_signal())
+		exit(-1);
+
+	const char *migtest = getenv("HERMIT_MIGTEST");
+	if(migtest) {
+		int timeout = atoi(migtest);
+		if(timeout > 0)
+			test_migration(timeout);
+	}
 
 	/* argv[0] is 'proxy', do not count it */
 	uhyve_argc = argc-1;

@@ -59,6 +59,7 @@
 
 #include "uhyve.h"
 #include "proxy.h"
+#include "uhyve-migration.h"
 
 #define GUEST_OFFSET		0x0
 
@@ -462,6 +463,21 @@ int load_kernel(uint8_t* mem, char* path)
 			 */
 
 		}
+
+		/* Pierre: migration stuff
+		 * Set the address of the atomic migration flag */
+		set_migrate_flag_addr((uint64_t) (mem+paddr-GUEST_OFFSET + 0x174));
+
+		/* Getod value so that the guest has access to an abolute clock */
+		*((uint64_t*) (mem+paddr-GUEST_OFFSET + 0x184)) = boot_gtod;
+
+		/* Set the resume flag accordingly */
+		*((uint32_t*) (mem+paddr-GUEST_OFFSET + 0x17C)) = 0;
+		char * str = getenv("HERMIT_MIGRATE_RESUME");
+		if(str)
+			if(atoi(str))
+				*((uint32_t*) (mem+paddr-GUEST_OFFSET + 0x17C)) = 1;
+
 		*((uint64_t*) (mem+paddr-GUEST_OFFSET + 0x158)) += memsz; // total kernel size
 	}
 

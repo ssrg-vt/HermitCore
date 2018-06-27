@@ -17,6 +17,4 @@ M	kernel/syscall.c
 M	kernel/tasks.c
 M	mm/vma.c
 M	tools/CMakeLists.txt
-D	tools/uhyve-migration.c
-D	tools/uhyve-migration.h
 M	tools/uhyve.c
