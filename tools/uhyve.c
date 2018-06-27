@@ -65,8 +65,8 @@
 #include "uhyve.h"
 #include "uhyve-syscalls.h"
 #include "uhyve-net.h"
-#include "proxy.h"
 #include "uhyve-migration.h"
+#include "proxy.h"
 
 static bool restart = false;
 static pthread_t net_thread;
@@ -446,6 +446,13 @@ static int vcpu_loop(void)
 						strcpy(guest_mem + (size_t)env_ptr[i], uhyve_envp[i]);
 
 					break;
+				}
+
+			case UHYVE_PORT_MIGRATE: {
+				printf("Uhyve received migration request!\n");
+				exit(0);
+				break;
+
 				}
 
 			case UHYVE_PORT_PFAULT: {

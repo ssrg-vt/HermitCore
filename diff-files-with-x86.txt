@@ -16,5 +16,3 @@ D	kernel/stack_slots.c
 M	kernel/syscall.c
 M	kernel/tasks.c
 M	mm/vma.c
-M	tools/CMakeLists.txt
-M	tools/uhyve.c
