@@ -69,4 +69,6 @@ int load_checkpoint(uint8_t* mem, char* path);
 void init_kvm_arch(void);
 int load_kernel(uint8_t* mem, char* path);
 
+unsigned long long boot_gtod;
+
 #endif

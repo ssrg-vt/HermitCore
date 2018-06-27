@@ -15,22 +15,8 @@ D	kernel/migration.c
 D	kernel/stack_slots.c
 M	kernel/syscall.c
 M	kernel/tasks.c
-M	kernel/timer.c
 M	mm/vma.c
 M	tools/CMakeLists.txt
-M	tools/proxy.c
-M	tools/proxy.h
-D	tools/queue.h
-A	tools/uhyve-aarch64.c
-D	tools/uhyve-gdb.c
-D	tools/uhyve-gdb.h
 D	tools/uhyve-migration.c
 D	tools/uhyve-migration.h
-D	tools/uhyve-msr.h
-M	tools/uhyve-net.h
-M	tools/uhyve-syscalls.h
-A	tools/uhyve-x86_64.c
-R100	tools/uhyve-cpu.h	tools/uhyve-x86_64.h
 M	tools/uhyve.c
-M	tools/uhyve.h
-M	tools/utils.c
