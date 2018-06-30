@@ -48,9 +48,17 @@ extern size_t image_size;
 #define TIMER_FREQ	100 /* in HZ */
 #define CLOCK_TICK_RATE	1193182 /* 8254 chip's internal oscillator frequency */
 #define CACHE_LINE	64
-#define HEAP_START	(PAGE_2M_CEIL(((size_t)&kernel_start + image_size + (16ULL << 10))))
+
+/* Stack slots stuff. Becasue of the simple implementation of the stack slots,
+ * they are indexed by thread id. SO the maximum number of slots also put a
+ * cap on the maximum number of threads. */
+#define STACK_SLOTS_START	(PAGE_2M_CEIL((size_t)&kernel_start + image_size + (16ULL << 10)))
+#define STACK_SLOTS_NUM 	(MAX_TASKS)
+
+#define HEAP_START			(PAGE_2M_CEIL(STACK_SLOTS_START + STACK_SLOTS_NUM * DEFAULT_STACK_SIZE + PAGE_SIZE))
+
 #define HEAP_SIZE	(1ULL << 32)
-#define KMSG_SIZE	0x1000
+#define KMSG_SIZE	0x8000
 #define INT_SYSCALL	0x80
 #define MAILBOX_SIZE	128
 //#define WITH_PCI_IDS

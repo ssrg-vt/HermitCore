@@ -38,6 +38,11 @@
 #include <hermit/memory.h>
 #include <hermit/logging.h>
 #include <asm/processor.h>
+#include <hermit/migration.h>
+#include <hermit/migration-chkpt.h>
+#include <hermit/stack_slots.h>
+
+static int lwip_thread_id = -1;
 
 /*
  * Note that linker symbols are not variables, they have no memory allocated for
@@ -48,6 +53,12 @@ extern atomic_int32_t cpu_online;
 volatile uint32_t go_down = 0;
 
 #define TLS_OFFSET	8
+
+/* Migration metadata used on resume path */
+chkpt_metadata_t resume_md;
+
+/* Are we resuming from migration? */
+extern uint32_t mig_resuming;
 
 /** @brief Array of task structures (aka PCB)
  *
@@ -330,8 +341,10 @@ void finish_task_switch(void)
 		if (old->status == TASK_FINISHED) {
 			/* cleanup task */
 			if (old->stack) {
-				//LOG_INFO("Release stack at 0x%zx\n", old->stack);
-				destroy_stack(old->stack, DEFAULT_STACK_SIZE);
+				LOG_INFO("Release stack at 0x%zx\n", old->stack);
+				/* if the stack is allocated on a slot, nothing to do */
+				if(!addr_in_stack_slot((uint64_t)old->stack))
+					destroy_stack(old->stack, DEFAULT_STACK_SIZE);
 				old->stack = NULL;
 			}
 
@@ -452,17 +465,34 @@ int clone_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio)
 
 	curr_task = per_core(current_task);
 
-	stack = create_stack(DEFAULT_STACK_SIZE);
-	if (BUILTIN_EXPECT(!stack, 0))
-		return -ENOMEM;
+	spinlock_irqsave_lock(&table_lock);
+
+	/* If we resume from migration, get a task slot based on our id which
+	 * is the same as the id we had on the source machine */
+	if(mig_resuming) {
+		tid_t old_id = *((tid_t *)arg);
+		stack = (void *)get_stack_slot(old_id);
+
+		/* Check if the task id is available */
+		if(task_table[old_id].status != TASK_INVALID) {
+			LOG_ERROR("Cannot resume thread %d: task_table slot taken\n");
+			DIE();
+		}
+
+		i = old_id;
+
+	} else {
+		for(i=0; i<MAX_TASKS; i++)
+			if(task_table[i].status == TASK_INVALID)
+				break;
+		stack = (void *)get_stack_slot(i);
+	}
 
 	ist =  create_stack(KERNEL_STACK_SIZE);
 	if (BUILTIN_EXPECT(!ist, 0)) {
 		destroy_stack(stack, DEFAULT_STACK_SIZE);
 		return -ENOMEM;
 	}
-
-	spinlock_irqsave_lock(&table_lock);
 
 	core_id = get_next_core_id();
 	if (BUILTIN_EXPECT(core_id >= MAX_CORES, 0))
@@ -554,9 +584,21 @@ int create_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio, uint32_t c
 	if (BUILTIN_EXPECT(!readyqueues[core_id].idle, 0))
 		return -EINVAL;
 
-	stack = create_stack(DEFAULT_STACK_SIZE);
-	if (BUILTIN_EXPECT(!stack, 0))
-		return -ENOMEM;
+	/* The primary thread will be the first to enter here, he will always get
+	 * the first stack slot. Other migratable threads go through clone_task so
+	 * we don't have to care about them here. LWIP thread goes through here
+	 * but we do not migrate it, so just get a stack outside of the slot
+	 * area */
+	static int primary_thread = 1;
+	if(primary_thread) {
+		primary_thread = 0;
+		stack = (void *)get_stack_slot(0);
+		LOG_INFO("Primary task got its stack @0x%x\n", stack);
+	} else {
+		 stack = create_stack(DEFAULT_STACK_SIZE);
+		if (BUILTIN_EXPECT(!stack, 0))
+			return -ENOMEM;
+	}
 
 	ist = create_stack(KERNEL_STACK_SIZE);
 	if (BUILTIN_EXPECT(!ist, 0)) {
@@ -897,5 +939,38 @@ int get_task(tid_t id, task_t** task)
 
 	*task = &task_table[id];
 
+	return 0;
+}
+
+/* Keep track of the id for LWIP thread (we do not want to migrate it) */
+void set_lwip_thread_id(int id) {
+	lwip_thread_id = id;
+}
+
+/* Used for migration to get a list of migrated thread ids */
+int get_tasks_ids(tid_t *array, int array_size) {
+	int i, j;
+
+	memset(array, 0x0, array_size * sizeof(tid_t));
+	array[0] = per_core(current_task)->id;
+
+	j = 1;
+	spinlock_irqsave_lock(&table_lock);
+	for(i=0; i<MAX_TASKS; i++) {
+		int status = task_table[i].status;
+		int id = task_table[i].id;
+		if((id != lwip_thread_id) && (id != array[0]) && (status == TASK_READY ||
+					status == TASK_RUNNING || status == TASK_BLOCKED)) {
+			if(j < array_size)
+				array[j++] = task_table[i].id;
+			else {
+				spinlock_irqsave_lock(&table_lock);
+				LOG_ERROR("Cannot get task ids: array too small\n");
+				return -1;
+			}
+		}
+	}
+
+	spinlock_irqsave_lock(&table_lock);
 	return 0;
 }

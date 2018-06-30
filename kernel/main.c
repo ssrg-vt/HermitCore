@@ -35,6 +35,8 @@
 #include <hermit/syscall.h>
 #include <hermit/memory.h>
 #include <hermit/logging.h>
+#include <hermit/migration.h>
+#include <hermit/stack_slots.h>
 #include <asm/irq.h>
 #include <asm/page.h>
 #include <asm/uart.h>
@@ -143,6 +145,7 @@ static void tcpip_init_done(void* arg)
 	sys_sem_t* sem = (sys_sem_t*)arg;
 
 	LOG_INFO("LwIP's tcpip thread has task id %d\n", per_core(current_task)->id);
+	set_lwip_thread_id(id);
 
 	sys_sem_signal(sem);
 }
@@ -613,6 +616,9 @@ int hermit_main(void)
 
 	print_cpu_status(isle);
 	//vma_dump();
+
+	if(stack_slots_init())
+		DIE();
 
 	create_kernel_task_on_core(NULL, initd, NULL, NORMAL_PRIO, boot_processor);
 

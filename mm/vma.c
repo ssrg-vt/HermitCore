@@ -32,6 +32,7 @@
 #include <hermit/spinlock.h>
 #include <hermit/errno.h>
 #include <hermit/logging.h>
+#include <hermit/stack_slots.h>
 
 /*
  * Note that linker symbols are not variables, they have no memory allocated for
@@ -62,6 +63,16 @@ int vma_init(void)
 		KERNEL_END_CEIL((size_t) &kernel_start + image_size),
 		VMA_READ|VMA_WRITE|VMA_EXECUTE|VMA_CACHEABLE);
 	if (BUILTIN_EXPECT(ret, 0))
+		goto out;
+
+	// Reserve space for stack slots
+	LOG_INFO("vma_init: reserve 0x%llx - 0x%llx for stack slots\n",
+			STACK_SLOTS_START, STACK_SLOTS_START +
+			STACK_SLOTS_NUM * DEFAULT_STACK_SIZE + PAGE_SIZE);
+	ret = vma_add(STACK_SLOTS_START, STACK_SLOTS_START +
+			STACK_SLOTS_NUM * DEFAULT_STACK_SIZE + PAGE_SIZE,
+			VMA_READ|VMA_WRITE|VMA_CACHEABLE);
+	if(BUILTIN_EXPECT(ret, 0))
 		goto out;
 
 	// reserve space for the heap
