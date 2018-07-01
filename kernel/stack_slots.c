@@ -55,21 +55,18 @@ uint64_t get_stack_slot(int task_id) {
 	uint64_t pages_needed = DEFAULT_STACK_SIZE >> PAGE_BITS;
 
 	if (BUILTIN_EXPECT(!slot, 0))
-		return -1;
+		return 0;
 
 	size_t phy = get_pages(pages_needed);
 	if(!phy) {
 		MIGERR("Cannot get pages for stack slots allocation\n");
-		return -1;
+		return 0;
 	}
 
 	if(page_map(slot + PAGE_SIZE, phy, pages_needed, PG_RW|PG_GLOBAL|PG_NX)) {
 		MIGERR("Cannot map pages for stack slots\n");
-		return -1;
+		return 0;
 	}
-
-	MIGLOG("stack slots created stack from 0x%x to 0x%x\n", slot, slot +
-			pages_needed * PAGE_SIZE);
 
 	return slot + PAGE_SIZE;
 }
