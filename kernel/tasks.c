@@ -399,6 +399,8 @@ void NORETURN do_exit(int arg)
 
 	curr_task->status = TASK_FINISHED;
 
+	dec_running_threads();
+
 	reschedule();
 
 	irq_nested_enable(flags);
@@ -552,6 +554,7 @@ int clone_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio)
 	spinlock_irqsave_unlock(&table_lock);
 
 	if (!ret) {
+		incr_running_threads();
 		LOG_DEBUG("start new thread %d on core %d with stack address %p\n", i, core_id, stack);
 	}
 
@@ -637,7 +640,40 @@ int create_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio, uint32_t c
 			if (id)
 				*id = i;
 
-			ret = create_default_frame(task_table+i, ep, arg, core_id);
+			if(mig_resuming) {
+				uint64_t stack_base;
+				int iterator;
+
+				MIGLOG("Early resume from migration\n");
+
+				if(migrate_restore_area(CHKPT_MDATA_FILE, (uint64_t)&resume_md,
+						sizeof(chkpt_metadata_t))) {
+					ret = -EINVAL;
+					goto out;
+				}
+
+				/* Store in a variable the number of threads to resume */
+				iterator = 0;
+				while(resume_md.task_ids[iterator++] != 0);
+				init_threads_to_resume(iterator-1);
+
+				stack_base = resume_md.stack_base[(int)resume_md.task_ids[0]];
+				if((uint64_t)stack != stack_base) {
+					MIGERR("Primary thread: stack allocated @0x%x differs "
+							"from original location (0x%x)\n", stack,
+							stack_base);
+					DIE();
+				}
+
+				/* Primary thread */
+				ret = create_resume_frame(task_table+i, (void *)resume_md.ip,
+						arg, core_id,
+						resume_md.stack_offset[(int)resume_md.task_ids[0]]);
+
+			}
+			else
+				ret = create_default_frame(task_table+i, ep, arg, core_id);
+
 			if (ret)
 				goto out;
 

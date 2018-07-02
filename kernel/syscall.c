@@ -40,6 +40,7 @@
 #include <asm/uhyve.h>
 #include <asm/io.h>
 #include <sys/poll.h>
+#include <hermit/migration-fd.h>
 #include <hermit/umalloc.h>
 
 #include <lwip/sockets.h>

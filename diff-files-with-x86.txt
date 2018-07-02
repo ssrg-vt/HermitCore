@@ -1,18 +1,4 @@
 M	arch/x86/kernel/tasks.c:
   - implement create_resume_frame for aarch64
-D	include/hermit/migration-chkpt.h
-D	include/hermit/migration-fd.h
-D	include/hermit/migration-x86-regs.h
-D	include/hermit/migration.h
-D	include/hermit/stack_slots.h
-M	include/hermit/stddef.h
-M	include/hermit/tasks.h
-D	kernel/gettimeofday.c
 M	kernel/main.c
-D	kernel/migration-chkpt.c
-D	kernel/migration-fd.c
-D	kernel/migration.c
-D	kernel/stack_slots.c
 M	kernel/syscall.c
-M	kernel/tasks.c
-M	mm/vma.c

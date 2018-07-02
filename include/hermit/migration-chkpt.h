@@ -24,13 +24,25 @@ typedef struct {
 	uint64_t heap_size;		/* Heap size */
 	uint64_t tls_size;		/* tls size */
 
-	/* Callee-saved register set */
+	/* Callee-saved register set: x86_64 */
 	uint64_t r12[MAX_TASKS];
 	uint64_t r13[MAX_TASKS];
 	uint64_t r14[MAX_TASKS];
 	uint64_t r15[MAX_TASKS];
 	uint64_t rbx[MAX_TASKS];
 	uint64_t rbp[MAX_TASKS];
+
+	/* Callee-saved register set: aarch64 */
+	uint64_t x19[MAX_TASKS];
+	uint64_t x20[MAX_TASKS];
+	uint64_t x21[MAX_TASKS];
+	uint64_t x22[MAX_TASKS];
+	uint64_t x23[MAX_TASKS];
+	uint64_t x24[MAX_TASKS];
+	uint64_t x25[MAX_TASKS];
+	uint64_t x26[MAX_TASKS];
+	uint64_t x27[MAX_TASKS];
+	uint64_t x28[MAX_TASKS];
 
 } chkpt_metadata_t;
 

@@ -114,6 +114,7 @@ extern uint8_t hcgateway[4];
 extern uint8_t hcmask[4];
 
 extern void signal_init();
+extern void gettimeofday_init();
 
 static int hermit_init(void)
 {
@@ -127,14 +128,15 @@ static int hermit_init(void)
 	for(i=1; i<MAX_CORES; i++)
 		memcpy((char*) &percore_start + i*sz, (char*) &percore_start, sz);
 
+	migrate_init();
 	koutput_init();
-
 	system_init();
 	irq_init();
 	timer_init();
 	multitasking_init();
 	memory_init();
 	signal_init();
+	gettimeofday_init();
 
 	return 0;
 }
@@ -580,6 +582,8 @@ out:
 
 int hermit_main(void)
 {
+	unsigned int id;
+
 	hermit_init();
 	system_calibration(); // enables also interrupts
 
@@ -620,7 +624,10 @@ int hermit_main(void)
 	if(stack_slots_init())
 		DIE();
 
-	create_kernel_task_on_core(NULL, initd, NULL, NORMAL_PRIO, boot_processor);
+	create_kernel_task_on_core((tid_t *)&id, initd, NULL, NORMAL_PRIO, boot_processor);
+
+	/* Keep track of main thread id for migration */
+	set_primary_thread_id(id);
 
 	while(1) {
 		check_workqueues();
