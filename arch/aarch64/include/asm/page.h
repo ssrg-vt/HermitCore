@@ -73,7 +73,7 @@
 /// Align to 2M boundary
 #define PAGE_2M_FLOOR(addr)	( (addr)                   & ((~0L) << 21))
 // Align the kernel end
-#define KERNEL_END_CEIL(addr)	(((addr) + (16L << 10)) & ~0xFFFF)
+#define KERNEL_END_CEIL(addr)	(((addr) + (16L << 10) - 1) & ~0x3FFFL)
 
 /// Page is present
 #define PG_PRESENT		(1UL << 0)
@@ -239,5 +239,9 @@ static inline void tlb_flush_range(size_t start, size_t end)
 	asm volatile ("dsb ish" ::: "memory");
 	asm volatile ("isb" ::: "memory");
 }
+
+/** @brief Print the current page table tree
+ */
+void page_dump(void);
 
 #endif
