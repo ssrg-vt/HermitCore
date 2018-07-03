@@ -62,15 +62,15 @@ extern int32_t possible_isles;
 extern volatile int libc_sd;
 
 void* sys_stackaddr(void) {
-        task_t* task = per_core(current_task);
-        return task->stack;
+	task_t* task = per_core(current_task);
+	return task->stack;
 }
 
 size_t sys_stacksize(void) {
-        return DEFAULT_STACK_SIZE;
+	return DEFAULT_STACK_SIZE;
 }
 
-static inline int socket_send(int fd, const 	void* buf, size_t len)
+static inline int socket_send(int fd, const void* buf, size_t len)
 {
 	int ret, sz = 0;
 
@@ -185,7 +185,9 @@ ssize_t uhyve_noncontiguous_read(int fd, char *buf, size_t len) {
 		if(!((size_t)buf % PAGE_SIZE)) {
 			cur_len = (len < PAGE_SIZE) ? len : PAGE_SIZE;
 		} else {
-			cur_len = PAGE_CEIL((size_t)buf) - (size_t)buf;
+			cur_len = PAGE_CEIL((size_t)buf) - (size_t)buf; //FIXME: what is going on here
+			cur_len = (((size_t)buf + len) > PAGE_CEIL((size_t)buf))
+				? (PAGE_CEIL((size_t)buf) - (size_t)buf) : len;
 		}
 
 		/* Force mapping */
@@ -194,6 +196,10 @@ ssize_t uhyve_noncontiguous_read(int fd, char *buf, size_t len) {
 		arg.buf = (char *)virt_to_phys((size_t)buf);
 		arg.len = cur_len;
 		arg.ret = -1;
+
+		if(fd > 2)
+			arg.fd = get_real_fd(fd);
+
 		uhyve_send(UHYVE_PORT_READ, (unsigned)virt_to_phys((size_t)&arg));
 
 		if(arg.ret < 0)
@@ -277,6 +283,43 @@ typedef struct {
 	size_t len;
 } __attribute__((packed)) uhyve_write_t;
 
+ssize_t uhyve_noncontiguous_write(int fd, const char *buf, size_t len) {
+	char *cur_buf = (char *)buf;
+	ssize_t bytes_written = 0;
+	size_t cur_len = 0;
+	uhyve_write_t arg = {fd, 0x0, 0x0};
+
+	while(len) {
+
+		if(!((size_t)cur_buf % PAGE_SIZE)) {
+			cur_len = (len < PAGE_SIZE) ? len : PAGE_SIZE;
+		} else {
+			cur_len = (((size_t)cur_buf + len) > PAGE_CEIL((size_t)cur_buf))
+				? (PAGE_CEIL((size_t)cur_buf) - (size_t)cur_buf) : len;
+		}
+
+		arg.buf = (char *)virt_to_phys((size_t)cur_buf);
+		arg.len = cur_len;
+
+		if(fd > 2)
+			arg.fd = get_real_fd(fd);
+
+		uhyve_send(UHYVE_PORT_WRITE, (unsigned)virt_to_phys((size_t)&arg));
+
+		if(arg.len == (size_t)(-1))
+			return -1;
+
+		bytes_written += arg.len;
+		if(arg.len != cur_len)
+			break;
+
+		cur_buf += cur_len;
+		len -= cur_len;
+	}
+
+	return bytes_written;
+}
+
 ssize_t sys_write(int fd, const char* buf, size_t len)
 {
 	if (BUILTIN_EXPECT(!buf, 0))
@@ -295,11 +338,16 @@ ssize_t sys_write(int fd, const char* buf, size_t len)
 	}
 
 	if (is_uhyve()) {
+
+		return uhyve_noncontiguous_write(fd, buf, len);
+
+#if 0
 		uhyve_write_t uhyve_args = {fd, (const char*) virt_to_phys((size_t) buf), len};
 
 		uhyve_send(UHYVE_PORT_WRITE, (unsigned)virt_to_phys((size_t)&uhyve_args));
 
 		return uhyve_args.len;
+#endif
 	}
 
 	spinlock_irqsave_lock(&lwip_lock);
@@ -393,6 +441,12 @@ int sys_open(const char* name, int flags, int mode)
 
 		uhyve_send(UHYVE_PORT_OPEN, (unsigned)virt_to_phys((size_t) &uhyve_open));
 
+		if(uhyve_open.ret != -1)
+			if(migration_fd_add(uhyve_open.ret, name)) {
+				LOG_ERROR("Cannot add fd to migration array\n");
+				return -1;
+			}
+
 		return uhyve_open.ret;
 	}
 
@@ -448,6 +502,23 @@ out:
 }
 
 typedef struct {
+	char *filename;
+	int ret;
+} __attribute__ ((packed)) uhyve_unlink_t;
+
+int sys_unlink(const char *filename) {
+	uhyve_unlink_t param;
+
+	if(!is_uhyve())
+		return -ENOSYS;
+
+	param.filename = (char *)virt_to_phys((size_t)filename);
+
+	uhyve_send(UHYVE_PORT_UNLINK, (unsigned)virt_to_phys((size_t)&param));
+	return param.ret;
+}
+
+typedef struct {
 	int sysnr;
 	int fd;
 } __attribute__((packed)) sys_close_t;
@@ -476,6 +547,10 @@ int sys_close(int fd)
 
 		uhyve_send(UHYVE_PORT_CLOSE, (unsigned)virt_to_phys((size_t) &uhyve_close));
 
+		if(fd > 2 && migration_fd_del(fd)) {
+			return -1;
+		}
+
 		return uhyve_close.ret;
 	}
 
@@ -497,6 +572,7 @@ out:
 	return ret;
 }
 
+/* For spinlock migration, same hack as for the semaphores */
 int sys_spinlock_init(spinlock_t** lock)
 {
 	int ret;
@@ -643,6 +719,9 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 {
 	if (is_uhyve()) {
 		uhyve_lseek_t uhyve_lseek = { fd, offset, whence };
+
+		if(fd > 2)
+			uhyve_lseek.fd = get_real_fd(fd);
 
 		outportl(UHYVE_PORT_LSEEK, (unsigned)virt_to_phys((size_t) &uhyve_lseek));
 
