@@ -504,52 +504,62 @@ int clone_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio)
 		goto out;
 	}
 
-	for(i=0; i<MAX_TASKS; i++) {
-		if (task_table[i].status == TASK_INVALID) {
-			task_table[i].id = i;
-			task_table[i].status = TASK_READY;
-			task_table[i].last_core = core_id;
-			task_table[i].last_stack_pointer = NULL;
-			task_table[i].stack = stack;
-			task_table[i].prio = prio;
-			task_table[i].heap = curr_task->heap;
-			task_table[i].start_tick = get_clock_tick();
-			task_table[i].last_tsc = 0;
-			task_table[i].parent = curr_task->id;
-			task_table[i].tls_addr = curr_task->tls_addr;
-			task_table[i].tls_size = curr_task->tls_size;
-			task_table[i].ist_addr = ist;
-			task_table[i].lwip_err = 0;
-			task_table[i].signal_handler = NULL;
+	task_table[i].id = i;
+	task_table[i].status = TASK_READY;
+	task_table[i].last_core = core_id;
+	task_table[i].last_stack_pointer = NULL;
+	task_table[i].stack = stack;
+	task_table[i].prio = prio;
+	task_table[i].heap = curr_task->heap;
+	task_table[i].start_tick = get_clock_tick();
+	task_table[i].last_tsc = 0;
+	task_table[i].parent = curr_task->id;
+	task_table[i].tls_addr = curr_task->tls_addr;
+	task_table[i].tls_size = curr_task->tls_size;
+	task_table[i].ist_addr = ist;
+	task_table[i].lwip_err = 0;
+	task_table[i].signal_handler = NULL;
 
-			if (id)
-				*id = i;
+	if (id)
+		*id = i;
 
-			ret = create_default_frame(task_table+i, ep, arg, core_id);
-			if (ret)
-				goto out;
-
-                        // add task in the readyqueues
-			spinlock_irqsave_lock(&readyqueues[core_id].lock);
-			readyqueues[core_id].prio_bitmap |= (1 << prio);
-			readyqueues[core_id].nr_tasks++;
-			if (!readyqueues[core_id].queue[prio-1].first) {
-				task_table[i].next = task_table[i].prev = NULL;
-				readyqueues[core_id].queue[prio-1].first = task_table+i;
-				readyqueues[core_id].queue[prio-1].last = task_table+i;
-			} else {
-				task_table[i].prev = readyqueues[core_id].queue[prio-1].last;
-				task_table[i].next = NULL;
-				readyqueues[core_id].queue[prio-1].last->next = task_table+i;
-				readyqueues[core_id].queue[prio-1].last = task_table+i;
-			}
-			// should we wakeup the core?
-			if (readyqueues[core_id].nr_tasks == 1)
-				wakeup_core(core_id);
-			spinlock_irqsave_unlock(&readyqueues[core_id].lock);
- 			break;
+	if(mig_resuming) {
+		tid_t old_id = *((tid_t *)arg);
+		uint64_t stack_base = resume_md.stack_base[old_id];
+		if(stack_base != (uint64_t)stack) {
+			LOG_ERROR("Clone task resuming from migration: allocated "
+					"stack (0x%x) is not at the expected location "
+					"(0x%x)\n", stack, stack_base);
+			DIE();
 		}
+		/* arg is used to give an id number for each secondary thread,
+		 * indexing which saved task the thread will restore */
+		ret = create_resume_frame(task_table+i, ep, arg, core_id,
+				resume_md.stack_offset[old_id]);
 	}
+	else
+		ret = create_default_frame(task_table+i, ep, arg, core_id);
+	if (ret)
+		goto out;
+
+				// add task in the readyqueues
+	spinlock_irqsave_lock(&readyqueues[core_id].lock);
+	readyqueues[core_id].prio_bitmap |= (1 << prio);
+	readyqueues[core_id].nr_tasks++;
+	if (!readyqueues[core_id].queue[prio-1].first) {
+		task_table[i].next = task_table[i].prev = NULL;
+		readyqueues[core_id].queue[prio-1].first = task_table+i;
+		readyqueues[core_id].queue[prio-1].last = task_table+i;
+	} else {
+		task_table[i].prev = readyqueues[core_id].queue[prio-1].last;
+		task_table[i].next = NULL;
+		readyqueues[core_id].queue[prio-1].last->next = task_table+i;
+		readyqueues[core_id].queue[prio-1].last = task_table+i;
+	}
+	// should we wakeup the core?
+	if (readyqueues[core_id].nr_tasks == 1)
+		wakeup_core(core_id);
+	spinlock_irqsave_unlock(&readyqueues[core_id].lock);
 
 	spinlock_irqsave_unlock(&table_lock);
 
