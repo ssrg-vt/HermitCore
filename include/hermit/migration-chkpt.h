@@ -43,6 +43,8 @@ typedef struct {
 	uint64_t x26[MAX_TASKS];
 	uint64_t x27[MAX_TASKS];
 	uint64_t x28[MAX_TASKS];
+	uint64_t x29[MAX_TASKS];
+	uint64_t x30[MAX_TASKS];
 
 } chkpt_metadata_t;
 

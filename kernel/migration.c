@@ -267,7 +267,7 @@ migrate_resume_entry_point:
 
 		/* Restore callee-saved registers */
 #ifdef __aarch64__
-		// r19 -> r28
+		// x19 -> x28 + frame pointer (x29) + link register (ret. addr, x30)
 		SET_X19(md.x19[task->id]);
 		SET_X20(md.x20[task->id]);
 		SET_X21(md.x21[task->id]);
@@ -278,6 +278,8 @@ migrate_resume_entry_point:
 		SET_X26(md.x26[task->id]);
 		SET_X27(md.x27[task->id]);
 		SET_X28(md.x28[task->id]);
+		SET_X29(md.x29[task->id]);
+		SET_X30(md.x30[task->id]);
 #else
 		SET_R12(md.r12[task->id]);
 		SET_R13(md.r13[task->id]);
@@ -362,6 +364,8 @@ migrate_resume_entry_point:
 	GET_X26(md.x26[task->id]);
 	GET_X27(md.x27[task->id]);
 	GET_X28(md.x28[task->id]);
+	GET_X29(md.x29[task->id]);
+	GET_X30(md.x30[task->id]);
 #else
 	GET_R12(md.r12[task->id]);
 	GET_R13(md.r13[task->id]);
