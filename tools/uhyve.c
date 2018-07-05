@@ -66,6 +66,7 @@
 #include "uhyve-syscalls.h"
 #include "uhyve-net.h"
 #include "proxy.h"
+#include "uhyve-gdb.h"
 
 static bool restart = false;
 static pthread_t net_thread;
@@ -89,6 +90,7 @@ __thread struct kvm_run *run = NULL;
 __thread int vcpufd = -1;
 __thread uint32_t cpuid = 0;
 static sem_t net_sem;
+static bool uhyve_gdb_enabled = false;
 
 int uhyve_argc = -1;
 int uhyve_envc = -1;
@@ -300,6 +302,8 @@ static int vcpu_loop(void)
 		switch (run->exit_reason) {
 		case KVM_EXIT_HLT:
 			fprintf(stderr, "Guest has halted the CPU, this is considered as a normal exit.\n");
+			if(uhyve_gdb_enabled)
+				uhyve_gdb_handle_term();
 			return 0;
 
 		case KVM_EXIT_MMIO:
@@ -453,11 +457,15 @@ static int vcpu_loop(void)
 			break;
 
 		case KVM_EXIT_FAIL_ENTRY:
+			if(uhyve_gdb_enabled)
+				uhyve_gdb_handle_exception(vcpufd, GDB_SIGNAL_SEGV);
 			err(1, "KVM: entry failure: hw_entry_failure_reason=0x%llx\n",
 				run->fail_entry.hardware_entry_failure_reason);
 			break;
 
 		case KVM_EXIT_INTERNAL_ERROR:
+			if(uhyve_gdb_enabled)
+				uhyve_gdb_handle_exception(vcpufd, GDB_SIGNAL_SEGV);
 			err(1, "KVM: internal error exit: suberror = 0x%x\n", run->internal.suberror);
 			break;
 
@@ -465,11 +473,14 @@ static int vcpu_loop(void)
 			fprintf(stderr, "KVM: receive shutdown command\n");
 
 		case KVM_EXIT_DEBUG:
-			print_registers();
-			dump_log();
-			exit(EXIT_FAILURE);
+			if(uhyve_gdb_enabled) {
+				uhyve_gdb_handle_exception(vcpufd, GDB_SIGNAL_TRAP);
+				break;
+			} else
+				print_registers();
 
 		default:
+			dump_log();
 			fprintf(stderr, "KVM: unhandled exit: exit_reason = 0x%x\n", run->exit_reason);
 			exit(EXIT_FAILURE);
 		}
@@ -630,7 +641,11 @@ int uhyve_init(char *path)
 int uhyve_loop(int argc, char **argv)
 {
 	const char* hermit_check = getenv("HERMIT_CHECKPOINT");
+	const char* hermit_debug = getenv("HERMIT_DEBUG");
 	int ts = 0, i = 0;
+
+	if(hermit_debug && atoi(hermit_debug) != 0)
+		uhyve_gdb_enabled = true;
 
 	/* argv[0] is 'proxy', do not count it */
 	uhyve_argc = argc-1;
@@ -689,6 +704,10 @@ int uhyve_loop(int argc, char **argv)
 		/* Start a virtual timer. It counts down whenever this process is executing. */
 		setitimer(ITIMER_REAL, &timer, NULL);
 	}
+
+	/* init gdb support */
+	if(uhyve_gdb_enabled)
+		uhyve_gdb_init(vcpufd);
 
 	// Run first CPU
 	return vcpu_loop();
