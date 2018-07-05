@@ -485,6 +485,7 @@ static int vcpu_loop(void)
 			fprintf(stderr, "KVM: receive shutdown command\n");
 
 		case KVM_EXIT_DEBUG:
+			printf("Guest trapped to debugger!\n");
 			print_registers();
 			dump_log();
 			exit(EXIT_FAILURE);

@@ -81,6 +81,10 @@
 #define ARM64_CORE_REG(x)		(KVM_REG_ARM64 | KVM_REG_SIZE_U64 |\
 					 KVM_REG_ARM_CORE | KVM_REG_ARM_CORE_REG(x))
 
+/* Used to walk the page table. FIXME can PT_ROOT be somewhere else? */
+#define PT_ROOT			0x240000
+#define PT_ADDR_MASK	0xFFFFFFFFF000
+
 static bool cap_irqfd = false;
 static bool cap_read_only = false;
 static int gic_fd = -1;
@@ -97,6 +101,36 @@ extern __thread struct kvm_run *run;
 extern __thread int vcpufd;
 extern __thread uint32_t cpuid;
 
+/* Walk the guest page table to translate a guest virtual into a guest physical
+ * address. This works only for 4KB granule and 4KB pages */
+uint64_t virt_to_phys(uint64_t vaddr) {
+	uint64_t pt0_index, pt1_index, pt2_index, pt3_index, paddr;
+	uint64_t *pt0_addr, *pt1_addr, *pt2_addr, *pt3_addr;
+
+	/* Compute index in level 0 PT: bits 39 to 47 */
+	pt0_index = (vaddr & 0xFF8000000000) >> 39;
+	/* Compute index in level 1 PT: bits 30 to 38 */
+	pt1_index = (vaddr & 0x7FC0000000) >> 30;
+	/* Compute index in level 2 PT: bits 21 to 29 */
+	pt2_index = (vaddr & 0x3FE00000) >> 21;
+	/* Compute index in level 3 PT: bits 12 to 20 */
+	pt3_index = (vaddr & 0x1FF000) >> 12;
+
+	/* Now find page table addresses at each level */
+	pt0_addr = (uint64_t *)((PT_ROOT + (uint64_t)guest_mem) & PT_ADDR_MASK);
+	pt1_addr = (uint64_t *)((pt0_addr[pt0_index] & PT_ADDR_MASK) +
+			(uint64_t)guest_mem);
+	pt2_addr = (uint64_t *)((pt1_addr[pt1_index] & PT_ADDR_MASK) +
+			(uint64_t)guest_mem);
+	pt3_addr = (uint64_t *)((pt2_addr[pt2_index] & PT_ADDR_MASK) +
+			(uint64_t)guest_mem);
+
+	/* last level page table gives us the physical page and we add the offset */
+	paddr = pt3_addr[pt3_index] & PT_ADDR_MASK;
+	paddr = paddr | (vaddr & 0xFFF);
+
+	return paddr;
+}
 void print_registers(void)
 {
 	struct kvm_one_reg reg;
@@ -191,6 +225,11 @@ void init_cpu_state(uint64_t elf_entry)
 	reg.id	= ARM64_CORE_REG(regs.pstate);
 	reg.addr = (uint64_t)&data;
 	kvm_ioctl(vcpufd, KVM_SET_ONE_REG, &reg);
+
+	/* Pierre debug test */
+	struct kvm_guest_debug dbg;
+	dbg.control = KVM_GUESTDBG_ENABLE;
+	kvm_ioctl(vcpufd, KVM_SET_GUEST_DEBUG, &dbg);
 
 #if 0
 	/* x0...x3 = 0 */
