@@ -274,6 +274,7 @@ void do_sync(void *regs)
 	uint32_t esr = read_esr();
 	uint32_t ec = esr >> 26;
 	uint32_t iss = esr & 0xFFFFFF;
+	uint64_t pc = read_elr_el1();
 
         /* data abort from lower or current level */
 	if ((ec == 0b100100) || (ec == 0b100101)) {
@@ -281,7 +282,6 @@ void do_sync(void *regs)
 		if (!(iss & (1 << 10))) {
 			/* read far_el1 register, which holds the faulting virtual address */
 			uint64_t far = read_far();
-			uint64_t pc = read_elr_el1();
 
 			if (page_fault_handler(far, pc) == 0)
 				return;
@@ -296,13 +296,20 @@ void do_sync(void *regs)
 		} else {
 			LOG_ERROR("Unknown exception\n");
 		}
+	} else if (ec == 0x3c) {
+		LOG_ERROR("Trap to debugger, PC=0x%x\n", pc);
 	} else {
-		LOG_ERROR("Unsupported exception class\n");
+		LOG_ERROR("Unsupported exception class: 0x%x, PC=0x%x\n", ec, pc);
 	}
 
+	/* Let's abort rather than perform an infinite loop */
+	sys_exit(-EFAULT);
+
+#if 0
 	while (1) {
 		HALT;
 	}
+#endif
 }
 
 size_t** do_fiq(void *regs)
