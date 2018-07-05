@@ -17,8 +17,7 @@ void dec_running_threads(void);
 void set_primary_thread_id(int id);
 void init_threads_to_resume(int num_threads);
 
-//#define DIE() {asm("int $3");}
-#define DIE() {volatile uint64_t xyz = 0; *(int*)xyz = 0;}
+#define DIE() {__builtin_trap();}
 
 /* To activate logging, invokes the kernel cmake with -DMIGRATION_LOG */
 #ifdef HAVE_MIG_LOG
