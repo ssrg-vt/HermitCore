@@ -128,6 +128,15 @@ static inline void set_tls(size_t addr) {
 		: );
 }
 
+/** @brief Read elr_el1 register
+ * @return elr_el1's value
+ */
+static inline size_t read_elr_el1(void) {
+	size_t val;
+	asm volatile("mrs %0, elr_el1" : "=r"(val) :: "memory");
+	return val;
+}
+
 /** @brief Read id_aa64mmfr0_el1 register
  * @return id_aa64mmfr0_el1's value
  */

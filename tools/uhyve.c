@@ -72,6 +72,7 @@ static bool restart = false;
 static pthread_t net_thread;
 static int* vcpu_fds = NULL;
 static pthread_mutex_t kvm_lock = PTHREAD_MUTEX_INITIALIZER;
+static char *program_name;
 
 extern bool verbose;
 
@@ -450,6 +451,17 @@ static int vcpu_loop(void)
 					break;
 				}
 
+			case UHYVE_PORT_PFAULT: {
+				char addr2line_call[128];
+				uhyve_pfault_t *arg = (uhyve_pfault_t *)(guest_mem + raddr);
+
+				printf("Guest page fault @0x%x (PC @0x%x)\n", arg->addr, arg->rip);
+				fflush(stdout);
+				sprintf(addr2line_call, "addr2line -a %x -e %s\n", arg->rip, program_name);
+				system(addr2line_call);
+				break;
+			}
+
 			default:
 				err(1, "KVM: unhandled KVM_EXIT_IO / KVM_EXIT_MMIO at port 0x%lx\n", port);
 				break;
@@ -556,6 +568,7 @@ void sigterm_handler(int signum)
 
 int uhyve_init(char *path)
 {
+	program_name = path;
 	signal(SIGTERM, sigterm_handler);
 
 	// register routine to close the VM

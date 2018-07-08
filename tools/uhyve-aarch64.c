@@ -221,14 +221,6 @@ void init_cpu_state(uint64_t elf_entry)
 	reg.addr = (uint64_t)&data;
 	kvm_ioctl(vcpufd, KVM_SET_ONE_REG, &reg);
 
-	char *uhyve_gdb_env;
-	if(uhyve_gdb_env = getenv("HERMIT_DEBUG"))
-		if(atoi(uhyve_gdb_env)) {
-			struct kvm_guest_debug dbg;
-			dbg.control = KVM_GUESTDBG_ENABLE;
-			kvm_ioctl(vcpufd, KVM_SET_GUEST_DEBUG, &dbg);
-		}
-
 #if 0
 	/* x0...x3 = 0 */
 	data    = 0;
