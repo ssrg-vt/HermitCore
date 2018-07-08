@@ -78,6 +78,11 @@ static uint32_t nr_hw_breakpoints = 0;
 static bool stepping = false;
 /* This is the trap instruction used for software breakpoints. */
 #ifdef __aarch64__
+#ifndef offsetof
+#define offsetof(TYPE, MEMBER)		((size_t) &((TYPE *)0)->MEMBER)
+#endif
+#define ARM64_CORE_REG(x)		(KVM_REG_ARM64 | KVM_REG_SIZE_U64 |\
+							 KVM_REG_ARM_CORE | KVM_REG_ARM_CORE_REG(x))
 static const uint32_t brk_1 = 0xd4200020;
 #else
 static const uint8_t int3 = 0xcc;
@@ -198,7 +203,6 @@ static int wait_for_connect()
         return -1;
     }
 
-	printf("debugger connected!\n");
     close(listen_socket_fd);
 
     protoent = getprotobyname("tcp");
@@ -625,8 +629,8 @@ void uhyve_gdb_handle_term(void) {
 
 static int kvm_arch_insert_sw_breakpoint(struct breakpoint_t *bp)
 {
-#ifdef aarch64
-	uint32_t *insn = bp->addr + guest_mem;
+#ifdef __aarch64__
+	uint32_t *insn = (uint32_t *)(bp->addr + guest_mem);
 #else
     uint8_t *insn = bp->addr + guest_mem;
 #endif
@@ -842,59 +846,40 @@ int uhyve_gdb_read_registers(int vcpufd,
                             uint8_t *registers,
                             size_t *len)
 {
-    struct kvm_regs kregs;
     struct uhyve_gdb_regs *gregs = (struct uhyve_gdb_regs *) registers;
     int ret;
 
-	printf("in gdb_read_registers\n");
-	fflush(stdout);
+#ifdef __aarch64__
+	/* There is no KVM_GET_REGS for aarch64, so we need to grab the registers
+	 * one by one */
+	struct kvm_one_reg reg;
+	uint64_t data;
+	uint32_t data32;
+
+	reg.addr = (uint64_t)&data32;
+	reg.id = ARM64_CORE_REG(regs.pstate);
+	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
+	gregs->cpsr = data32;
+
+	reg.addr = (uint64_t)&data;
+	reg.id = ARM64_CORE_REG(regs.pc);
+	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
+	gregs->pc = data;
+
+	reg.id = ARM64_CORE_REG(sp_el1);
+	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
+	gregs->sp = data;
+
+	for(int i=0; i<31; i++) {
+		reg.id = ARM64_CORE_REG(regs.regs[i]);
+		kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
+		gregs->x[i] = data;
+	}
+#else /* x86-64 */
+    struct kvm_regs kregs;
+    struct kvm_sregs sregs;
 
 	kvm_ioctl(vcpufd, KVM_GET_REGS, &kregs);
-
-	printf("in afterr _read_registers\n");
-	fflush(stdout);
-
-    if (*len < sizeof(struct uhyve_gdb_regs))
-        return -1;
-
-    *len = sizeof(struct uhyve_gdb_regs);
-
-#ifdef __aarch64__
-	gregs->pc = kregs.regs.pc;
-	gregs->sp = kregs.sp_el1;
-	gregs->x0 = kregs.regs.regs[0];
-	gregs->x1 = kregs.regs.regs[1];
-	gregs->x2 = kregs.regs.regs[2];
-	gregs->x3 = kregs.regs.regs[3];
-	gregs->x4 = kregs.regs.regs[4];
-	gregs->x5 = kregs.regs.regs[5];
-	gregs->x6 = kregs.regs.regs[6];
-	gregs->x7 = kregs.regs.regs[7];
-	gregs->x8 = kregs.regs.regs[8];
-	gregs->x9 = kregs.regs.regs[9];
-	gregs->x10 = kregs.regs.regs[10];
-	gregs->x11 = kregs.regs.regs[11];
-	gregs->x12 = kregs.regs.regs[12];
-	gregs->x13 = kregs.regs.regs[13];
-	gregs->x14 = kregs.regs.regs[14];
-	gregs->x15 = kregs.regs.regs[15];
-	gregs->x16 = kregs.regs.regs[16];
-	gregs->x17 = kregs.regs.regs[17];
-	gregs->x18 = kregs.regs.regs[18];
-	gregs->x19 = kregs.regs.regs[19];
-	gregs->x20 = kregs.regs.regs[20];
-	gregs->x21 = kregs.regs.regs[21];
-	gregs->x22 = kregs.regs.regs[22];
-	gregs->x23 = kregs.regs.regs[23];
-	gregs->x24 = kregs.regs.regs[24];
-	gregs->x25 = kregs.regs.regs[25];
-	gregs->x26 = kregs.regs.regs[26];
-	gregs->x27 = kregs.regs.regs[27];
-	gregs->x28 = kregs.regs.regs[28];
-	gregs->x29 = kregs.regs.regs[29];
-	gregs->x30 = kregs.regs.regs[30];
-#else /* x86-64 */
-    struct kvm_sregs sregs;
 	kvm_ioctl(vcpufd, KVM_GET_SREGS, &sregs);
 
 	gregs->rax = kregs.rax;
@@ -923,6 +908,11 @@ int uhyve_gdb_read_registers(int vcpufd,
     gregs->gs = sregs.gs.selector;
 #endif /* ISA switch */
 
+	if (*len < sizeof(struct uhyve_gdb_regs))
+        return -1;
+
+    *len = sizeof(struct uhyve_gdb_regs);
+
     return 0;
 }
 
@@ -930,53 +920,45 @@ int uhyve_gdb_write_registers(int vcpufd,
                              uint8_t *registers,
                              size_t len)
 {
-    struct kvm_regs kregs;
-    struct kvm_sregs sregs;
     struct uhyve_gdb_regs *gregs = (struct uhyve_gdb_regs *) registers;
     int ret;
-
-    /* Let's read all registers just in case we miss filling one of them. */
-	kvm_ioctl(vcpufd, KVM_GET_REGS, &kregs);
-	kvm_ioctl(vcpufd, KVM_GET_SREGS, &sregs);
 
     if (len < sizeof(struct uhyve_gdb_regs))
         return -1;
 
 #ifdef __aarch64__
-	kregs.regs.pc = gregs->pc;
-	kregs.sp_el1 = gregs->sp;
-	kregs.regs.regs[0] = gregs->x0;
-	kregs.regs.regs[1] = gregs->x1;
-	kregs.regs.regs[2] = gregs->x2;
-	kregs.regs.regs[3] = gregs->x3;
-	kregs.regs.regs[4] = gregs->x4;
-	kregs.regs.regs[5] = gregs->x5;
-	kregs.regs.regs[6] = gregs->x6;
-	kregs.regs.regs[7] = gregs->x7;
-	kregs.regs.regs[8] = gregs->x8;
-	kregs.regs.regs[9] = gregs->x9;
-	kregs.regs.regs[10] = gregs->x10;
-	kregs.regs.regs[11] = gregs->x11;
-	kregs.regs.regs[12] = gregs->x12;
-	kregs.regs.regs[13] = gregs->x13;
-	kregs.regs.regs[14] = gregs->x14;
-	kregs.regs.regs[15] = gregs->x15;
-	kregs.regs.regs[16] = gregs->x16;
-	kregs.regs.regs[17] = gregs->x17;
-	kregs.regs.regs[18] = gregs->x18;
-	kregs.regs.regs[19] = gregs->x19;
-	kregs.regs.regs[20] = gregs->x20;
-	kregs.regs.regs[21] = gregs->x21;
-	kregs.regs.regs[22] = gregs->x22;
-	kregs.regs.regs[23] = gregs->x23;
-	kregs.regs.regs[24] = gregs->x24;
-	kregs.regs.regs[25] = gregs->x25;
-	kregs.regs.regs[26] = gregs->x26;
-	kregs.regs.regs[27] = gregs->x27;
-	kregs.regs.regs[28] = gregs->x28;
-	kregs.regs.regs[29] = gregs->x29;
-	kregs.regs.regs[30] = gregs->x30;
+	struct kvm_one_reg reg;
+	uint64_t data;
+	uint32_t data32;
+	reg.addr = (uint64_t)&data32;
+
+	reg.id = ARM64_CORE_REG(regs.pstate);
+	data32 = gregs->cpsr;
+	kvm_ioctl(vcpufd, KVM_SET_ONE_REG, &reg);
+
+	reg.addr = (uint64_t)&data;
+
+	reg.id = ARM64_CORE_REG(regs.pc);
+	data = gregs->pc;
+	kvm_ioctl(vcpufd, KVM_SET_ONE_REG, &reg);
+
+	reg.id = ARM64_CORE_REG(sp_el1);
+	data = gregs->sp;
+	kvm_ioctl(vcpufd, KVM_SET_ONE_REG, &reg);
+
+	for(int i=0; i<31; i++) {
+		reg.id = ARM64_CORE_REG(regs.regs[i]);
+		data = gregs->x[i];
+		kvm_ioctl(vcpufd, KVM_SET_ONE_REG, &reg);
+	}
 #else /* x86-64 */
+    struct kvm_regs kregs;
+    struct kvm_sregs sregs;
+
+	/* Let's read all registers just in case we miss filling one of them. */
+	kvm_ioctl(vcpufd, KVM_GET_REGS, &kregs);
+	kvm_ioctl(vcpufd, KVM_GET_SREGS, &sregs);
+
     kregs.rax = gregs->rax;
     kregs.rbx = gregs->rbx;
     kregs.rcx = gregs->rcx;
@@ -1002,11 +984,13 @@ int uhyve_gdb_write_registers(int vcpufd,
     sregs.es.selector = gregs->es;
     sregs.fs.selector = gregs->fs;
     sregs.gs.selector = gregs->gs;
-#endif /* ISA switch */
+
 	kvm_ioctl(vcpufd, KVM_SET_REGS, &kregs);
 	kvm_ioctl(vcpufd, KVM_SET_SREGS, &sregs);
 
-    return 0;
+#endif /* ISA switch */
+
+	return 0;
 }
 
 int uhyve_gdb_add_breakpoint(int vcpufd, gdb_breakpoint_type type,
