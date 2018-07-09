@@ -629,6 +629,9 @@ void uhyve_gdb_handle_term(void) {
 
 static int kvm_arch_insert_sw_breakpoint(struct breakpoint_t *bp)
 {
+	printf("Insert BP at phy 0x%llx\n", bp->addr);
+	fflush(stdout);
+
 #ifdef __aarch64__
 	uint32_t *insn = (uint32_t *)(bp->addr + guest_mem);
 #else
@@ -687,6 +690,9 @@ static int uhyve_gdb_update_guest_debug(int vcpufd)
         [1] = 0x0, [2] = 0x1, [4] = 0x3, [8] = 0x2
     };
     int n = 0;
+
+	/* Pierre TODO remove this when stuff is working */
+	dbg.control = KVM_GUESTDBG_ENABLE;
 
     if (stepping)
         dbg.control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP;
@@ -1007,8 +1013,10 @@ int uhyve_gdb_add_breakpoint(int vcpufd, gdb_breakpoint_type type,
     if (bp == NULL)
         return -1;
 
-    if (type == GDB_BREAKPOINT_SW)
+    if (type == GDB_BREAKPOINT_SW) {
+		printf("Adding SW breakpoint @0x%llx\n", addr);
         kvm_arch_insert_sw_breakpoint(bp);
+	}
 
     if (uhyve_gdb_update_guest_debug(vcpufd) == -1)
         return -1;

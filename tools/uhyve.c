@@ -486,6 +486,7 @@ static int vcpu_loop(void)
 
 		case KVM_EXIT_DEBUG:
 			if(uhyve_gdb_enabled) {
+				inspect_page_table();
 				uhyve_gdb_handle_exception(vcpufd, GDB_SIGNAL_TRAP);
 				break;
 			} else

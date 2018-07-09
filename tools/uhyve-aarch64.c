@@ -81,7 +81,7 @@
 					 KVM_REG_ARM_CORE | KVM_REG_ARM_CORE_REG(x))
 
 /* Used to walk the page table */
-#define PT_ROOT			0x240000
+#define PT_ROOT			0x234000
 #define PT_ADDR_MASK	0xFFFFFFFFF000
 
 static bool cap_irqfd = false;
@@ -100,11 +100,45 @@ extern __thread struct kvm_run *run;
 extern __thread int vcpufd;
 extern __thread uint32_t cpuid;
 
+/* temp stuff */
+uint64_t pt[4] = {0x234000, 0x235000, 0x236000, 0x237000};
+void inspect_page_table() {
+
+	for(int level=0; level<4; level++) {
+		uint64_t prev_val = 0;
+		int pass = 0;
+
+		for(int i=0; i<512; i++) {
+
+			uint64_t val = ((uint64_t *)((uint64_t)guest_mem + pt[level] + i*8))[0];
+
+			if(prev_val == val) {
+				if(!pass) {
+					printf("/* ... */\n");
+					pass = 1;
+				}
+			} else {
+				printf("p%d[%d] = 0x%llx\n", level, i, val);
+				pass = 0;
+			}
+		}
+	}
+
+
+
+
+
+	fflush(stdout);
+}
+
 /* Walk the guest page table to translate a guest virtual into a guest physical
  * address. This works only for 4KB granule and 4KB pages */
 uint64_t aarch64_virt_to_phys(uint64_t vaddr) {
 	uint64_t pt0_index, pt1_index, pt2_index, pt3_index, paddr;
 	uint64_t *pt0_addr, *pt1_addr, *pt2_addr, *pt3_addr;
+
+//	printf("trying to compute paddr for virt 0x%llx\n", vaddr);
+//	fflush(stdout);
 
 	/* Compute index in level 0 PT: bits 39 to 47 */
 	pt0_index = (vaddr & 0xFF8000000000) >> 39;
@@ -127,6 +161,18 @@ uint64_t aarch64_virt_to_phys(uint64_t vaddr) {
 	/* last level page table gives us the physical page and we add the offset */
 	paddr = pt3_addr[pt3_index] & PT_ADDR_MASK;
 	paddr = paddr | (vaddr & 0xFFF);
+
+	int fixed = 0;
+#if 0
+	/* FIXME remove me */
+	if(paddr < 4096) {
+		fixed = 1;
+		paddr = vaddr;
+	}
+#endif
+
+//	printf(" aarch64_virt_to_phys %s 0x%llx -> 0x%llx\n",  fixed ? "(fixed)" : "", vaddr, paddr);
+//	fflush(stdout);
 
 	return paddr;
 }
