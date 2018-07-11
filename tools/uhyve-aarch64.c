@@ -81,55 +81,29 @@
 					 KVM_REG_ARM_CORE | KVM_REG_ARM_CORE_REG(x))
 
 /* Used to walk the page table */
-#define PT_ROOT			0x234000
+#define PT_ROOT			0x235000    /* FIXME how to get that properly ... */
 #define PT_ADDR_MASK	0xFFFFFFFFF000
 
 static bool cap_irqfd = false;
 static bool cap_read_only = false;
 static int gic_fd = -1;
 
+static uint64_t static_mem_size = 0;
+static uint64_t static_mem_start = 0;
+
 extern size_t guest_size;
 extern uint64_t elf_entry;
 extern uint8_t* klog;
 extern bool verbose;
 extern uint8_t* guest_mem;
-extern size_t guest_size;
 extern int kvm, vmfd, netfd, efd;
 extern uint8_t* mboot;
 extern __thread struct kvm_run *run;
 extern __thread int vcpufd;
 extern __thread uint32_t cpuid;
 
-/* temp stuff */
-uint64_t pt[4] = {0x234000, 0x235000, 0x236000, 0x237000};
-void inspect_page_table() {
-
-	for(int level=0; level<4; level++) {
-		uint64_t prev_val = 0;
-		int pass = 0;
-
-		for(int i=0; i<512; i++) {
-
-			uint64_t val = ((uint64_t *)((uint64_t)guest_mem + pt[level] + i*8))[0];
-
-			if(prev_val == val) {
-				if(!pass) {
-					printf("/* ... */\n");
-					pass = 1;
-				}
-			} else {
-				printf("p%d[%d] = 0x%llx\n", level, i, val);
-				pass = 0;
-			}
-		}
-	}
-
-
-
-
-
-	fflush(stdout);
-}
+/* Uncomment to debug PT walk */
+//#define VERBOSE_PT_WALK
 
 /* Walk the guest page table to translate a guest virtual into a guest physical
  * address. This works only for 4KB granule and 4KB pages */
@@ -137,8 +111,18 @@ uint64_t aarch64_virt_to_phys(uint64_t vaddr) {
 	uint64_t pt0_index, pt1_index, pt2_index, pt3_index, paddr;
 	uint64_t *pt0_addr, *pt1_addr, *pt2_addr, *pt3_addr;
 
-//	printf("trying to compute paddr for virt 0x%llx\n", vaddr);
-//	fflush(stdout);
+#ifdef VERBOSE_PT_WALK
+	printf("0x%llx -> ");
+	fflush(stdout);
+#endif
+
+	if(vaddr >= static_mem_start && vaddr < (static_mem_start + static_mem_size)) {
+#ifdef VERBOSE_PT_WALK
+		printf("0x%llx\n", vaddr);
+		fflush(stdout);
+#endif
+		return vaddr;
+	}
 
 	/* Compute index in level 0 PT: bits 39 to 47 */
 	pt0_index = (vaddr & 0xFF8000000000) >> 39;
@@ -162,20 +146,14 @@ uint64_t aarch64_virt_to_phys(uint64_t vaddr) {
 	paddr = pt3_addr[pt3_index] & PT_ADDR_MASK;
 	paddr = paddr | (vaddr & 0xFFF);
 
-	int fixed = 0;
-#if 0
-	/* FIXME remove me */
-	if(paddr < 4096) {
-		fixed = 1;
-		paddr = vaddr;
-	}
+#ifdef VERBOSE_PT_WALK
+	printf("0x%llx\n", paddr);
+	fflush(stdout);
 #endif
-
-//	printf(" aarch64_virt_to_phys %s 0x%llx -> 0x%llx\n",  fixed ? "(fixed)" : "", vaddr, paddr);
-//	fflush(stdout);
 
 	return paddr;
 }
+
 void print_registers(void)
 {
 	struct kvm_one_reg reg;
@@ -474,6 +452,13 @@ int load_kernel(uint8_t* mem, char* path)
 			continue;
 
 		//fprintf(stderr, "Kernel location 0x%zx, file size 0x%zx, memory size 0x%zx\n", paddr, filesz, memsz);
+
+		/* if it's not the TLS segment, then it is the only other segment: the
+		 * kernel, which is what we want here */
+		if (phdr[ph_i].p_type != PT_TLS) {
+			static_mem_size = memsz;
+			static_mem_start = paddr;
+		}
 
 		ret = pread_in_full(fd, mem+paddr-GUEST_OFFSET, filesz, offset);
 		if (ret < 0)

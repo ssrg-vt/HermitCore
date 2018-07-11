@@ -486,11 +486,14 @@ static int vcpu_loop(void)
 
 		case KVM_EXIT_DEBUG:
 			if(uhyve_gdb_enabled) {
-				inspect_page_table();
 				uhyve_gdb_handle_exception(vcpufd, GDB_SIGNAL_TRAP);
 				break;
-			} else
+			} else {
+				printf("Guest trapped due to debug exception but no debugger "
+						"connected\n");
 				print_registers();
+				/* Fall through the unhandled exit path */
+			}
 
 		default:
 			dump_log();

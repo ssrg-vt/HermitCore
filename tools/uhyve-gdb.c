@@ -629,9 +629,6 @@ void uhyve_gdb_handle_term(void) {
 
 static int kvm_arch_insert_sw_breakpoint(struct breakpoint_t *bp)
 {
-	printf("Insert BP at phy 0x%llx\n", bp->addr);
-	fflush(stdout);
-
 #ifdef __aarch64__
 	uint32_t *insn = (uint32_t *)(bp->addr + guest_mem);
 #else
@@ -691,19 +688,14 @@ static int uhyve_gdb_update_guest_debug(int vcpufd)
     };
     int n = 0;
 
-	/* Pierre TODO remove this when stuff is working */
-	dbg.control = KVM_GUESTDBG_ENABLE;
-
     if (stepping)
         dbg.control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP;
 
     if (!SLIST_EMPTY(&sw_breakpoints))
         dbg.control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP;
 
+#ifdef __x86_64__
     if (!SLIST_EMPTY(&hw_breakpoints)) {
-		fprintf(stderr, "Error: no HW breapoints on aarch64\n");
-		return -1;
-#if 0
         dbg.control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_HW_BP;
 
 	/* Enable global breakpointing (across all threads) on the control
@@ -721,8 +713,8 @@ static int uhyve_gdb_update_guest_debug(int vcpufd)
             dbg.arch.debugreg[7] |= ((uint32_t)len_code[bp->len] << (18 + n*4));
             n++;
         }
-#endif
     }
+#endif
 
 	kvm_ioctl(vcpufd, KVM_SET_GUEST_DEBUG, &dbg);
 
@@ -1013,10 +1005,13 @@ int uhyve_gdb_add_breakpoint(int vcpufd, gdb_breakpoint_type type,
     if (bp == NULL)
         return -1;
 
-    if (type == GDB_BREAKPOINT_SW) {
-		printf("Adding SW breakpoint @0x%llx\n", addr);
+#ifdef __aarch64__
+	if(type != GDB_BREAKPOINT_SW)
+		return -1;
+#endif
+
+    if (type == GDB_BREAKPOINT_SW)
         kvm_arch_insert_sw_breakpoint(bp);
-	}
 
     if (uhyve_gdb_update_guest_debug(vcpufd) == -1)
         return -1;
