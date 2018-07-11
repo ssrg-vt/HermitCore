@@ -99,6 +99,8 @@ char **uhyve_argv = NULL;
 extern char **environ;
 char **uhyve_envp = NULL;
 
+extern int uhyve_aarch64_find_pt_root(char *binary_path);
+
 typedef struct {
 	int argc;
 	int argsz[MAX_ARGC_ENVC];
@@ -723,8 +725,12 @@ int uhyve_loop(int argc, char **argv)
 	}
 
 	/* init gdb support */
-	if(uhyve_gdb_enabled)
+	if(uhyve_gdb_enabled) {
+#ifdef __aarch64__
+		uhyve_aarch64_find_pt_root(program_name);
+#endif
 		uhyve_gdb_init(vcpufd);
+	}
 
 	// Run first CPU
 	return vcpu_loop();
