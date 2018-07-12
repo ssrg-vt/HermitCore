@@ -394,6 +394,46 @@ void init_cpu_state(uint64_t elf_entry)
 	*((volatile uint32_t*) (mboot + 0x130)) = cpuid;
 }
 
+/* Return 1 if guest fiqs are enabled, 0 if the aren't */
+int get_fiq_status(void) {
+	struct kvm_one_reg reg;
+	uint64_t data;
+	reg.addr = (uint64_t)&data;
+
+	reg.id = ARM64_CORE_REG(regs.pstate);
+	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
+
+	return (data & PSR_F_BIT) ? 1 : 0;
+}
+
+/* disable guest fiqs */
+void mask_fiqs(void) {
+	struct kvm_one_reg reg;
+	uint64_t data;
+	reg.addr = (uint64_t)&data;
+
+	reg.id = ARM64_CORE_REG(regs.pstate);
+	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
+
+	data |= PSR_F_BIT;
+
+	kvm_ioctl(vcpufd, KVM_SET_ONE_REG, &reg);
+}
+
+/* Enable guest fiqs */
+void unmask_fiqs(void) {
+	struct kvm_one_reg reg;
+	uint64_t data;
+	reg.addr = (uint64_t)&data;
+
+	reg.id = ARM64_CORE_REG(regs.pstate);
+	kvm_ioctl(vcpufd, KVM_GET_ONE_REG, &reg);
+
+	data &= ~PSR_F_BIT;
+
+	kvm_ioctl(vcpufd, KVM_SET_ONE_REG, &reg);
+}
+
 void init_kvm_arch(void)
 {
 	guest_mem = mmap(NULL, guest_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);

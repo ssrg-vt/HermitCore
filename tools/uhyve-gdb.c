@@ -109,6 +109,16 @@ void *uhyve_checked_gpa_p(uint64_t gpa, size_t sz, uint8_t* chk_guest_mem,
 
 extern uint64_t aarch64_virt_to_phys(uint64_t vaddr);
 
+/* The timer prevents us to do correct single stepping when using the gdb stub.
+ * It seems the timer control register is not exported to the host, and trying
+ * to deassert the timer interrupt with KVM_IRQ_LINE before returning to the
+ * guest does not work either. Thus, we disable interrupts using the
+ * corresponding the pstate register bit (F) when single stepping is on */
+extern int mask_fiqs(void);
+extern int unmask_fiqs(void);
+extern int get_fiq_status(void);
+static int should_restore_int = 0;
+
 static int hex(unsigned char ch)
 {
     if ((ch >= 'a') && (ch <= 'f'))
@@ -1045,6 +1055,9 @@ int uhyve_gdb_enable_ss(int vcpufd)
 {
     stepping = true;
 
+	should_restore_int = get_fiq_status();
+	mask_fiqs();
+
     if (uhyve_gdb_update_guest_debug(vcpufd) == -1)
         return -1;
 
@@ -1054,6 +1067,10 @@ int uhyve_gdb_enable_ss(int vcpufd)
 int uhyve_gdb_disable_ss(int vcpufd)
 {
     stepping = false;
+	if(should_restore_int) {
+		should_restore_int = 1;
+		unmask_fiqs();
+	}
 
     if (uhyve_gdb_update_guest_debug(vcpufd) == -1)
         return -1;
