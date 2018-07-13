@@ -7,7 +7,7 @@ set_default(COMPILER_BIN_DIR ${HERMIT_PREFIX}/usr/local/bin)
 
 set(TARGET_ARCH aarch64-hermit)
 set(HERMIT_KERNEL_FLAGS
-					-Wall -O2 -mgeneral-regs-only
+					-Wall -O2 -g -mgeneral-regs-only
 					-fomit-frame-pointer -finline-functions -ffreestanding
 					-nostdinc -fno-stack-protector
 					-falign-jumps=1 -falign-loops=1

@@ -42,6 +42,8 @@ extern const void tls_start;
 extern const void tls_end;
 extern const void tdata_end;
 
+extern unsigned int forwarded_tls_size;
+
 extern atomic_int32_t cpu_online;
 extern atomic_int32_t current_boot_id;
 
@@ -61,14 +63,17 @@ typedef struct {
 
 static int init_tls(void)
 {
+	LOG_INFO("Init TLS\n");
 	task_t* curr_task = per_core(current_task);
 
 	// do we have a thread local storage?
-	if (((size_t) &tls_end - (size_t) &tls_start) > 0) {
+	//if (((size_t) &tls_end - (size_t) &tls_start) > 0) {
+	if(forwarded_tls_size > 0) {
 		size_t tdata_size = (size_t) &tdata_end - (size_t) &tls_start;
 
 		curr_task->tls_addr = (size_t) &tls_start;
-		curr_task->tls_size = (size_t) &tls_end - (size_t) &tls_start;
+		//curr_task->tls_size = (size_t) &tls_end - (size_t) &tls_start;
+		curr_task->tls_size = forwarded_tls_size;
 
 		thread_block_t* tcb = (thread_block_t*) kmalloc(curr_task->tls_size+sizeof(thread_block_t));
 		if (BUILTIN_EXPECT(!tcb, 0)) {

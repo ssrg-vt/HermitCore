@@ -418,12 +418,19 @@ int load_kernel(uint8_t* mem, char* path)
 	 * Load all segments with type "LOAD" from the file at offset
 	 * p_offset, and copy that into in memory.
 	 */
+	uint64_t base_addr = 0;
+	uint32_t tls_size = UINT32_MAX;
 	for (Elf64_Half ph_i = 0; ph_i < hdr.e_phnum; ph_i++)
 	{
 		uint64_t paddr = phdr[ph_i].p_paddr;
 		size_t offset = phdr[ph_i].p_offset;
 		size_t filesz = phdr[ph_i].p_filesz;
 		size_t memsz = phdr[ph_i].p_memsz;
+
+		if (phdr[ph_i].p_type == PT_TLS)
+		{
+			tls_size = memsz;
+		}
 
 		if (phdr[ph_i].p_type != PT_LOAD)
 			continue;
@@ -449,7 +456,7 @@ int load_kernel(uint8_t* mem, char* path)
 			*((uint32_t*) (mem+paddr-GUEST_OFFSET + 0x128)) = ncores; // number of used cpus
 			*((uint32_t*) (mem+paddr-GUEST_OFFSET + 0x130)) = 0; // cpuid
 			*((uint32_t*) (mem+paddr-GUEST_OFFSET + 0x148)) = 1; // announce uhyve
-
+			base_addr = paddr;
 
 			char* str = getenv("HERMIT_IP");
 			if (str) {
@@ -490,6 +497,13 @@ int load_kernel(uint8_t* mem, char* path)
 		*((uint64_t*) (mem+pstart-GUEST_OFFSET + 0x158)) = paddr + memsz - pstart; // total kernel size
 	}
 
+	/* Set TLS size */
+	if(tls_size == UINT32_MAX || !base_addr) {
+		fprintf(stderr, "Cannot set TLS size\n");
+		goto out;
+	}
+	*((uint32_t*) (mem+base_addr-GUEST_OFFSET + 0xD4)) = 8;//tls_size;
+	printf("tls_size = %d\n", tls_size);
 	ret = 0;
 
 out:

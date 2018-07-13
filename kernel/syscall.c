@@ -183,7 +183,8 @@ ssize_t uhyve_noncontiguous_read(int fd, char *buf, size_t len) {
 		if(!((size_t)buf % PAGE_SIZE)) {
 			cur_len = (len < PAGE_SIZE) ? len : PAGE_SIZE;
 		} else {
-			cur_len = PAGE_CEIL((size_t)buf) - (size_t)buf;
+			cur_len = (((size_t)buf + len) > PAGE_CEIL((size_t)buf))
+				? (PAGE_CEIL((size_t)buf) - (size_t)buf) : len;
 		}
 
 		/* Force mapping */
@@ -208,22 +209,10 @@ ssize_t uhyve_noncontiguous_read(int fd, char *buf, size_t len) {
 	return bytes_read;
 }
 
-
 ssize_t sys_read(int fd, char* buf, size_t len)
 {
 	sys_read_t sysargs = {__NR_read, fd, len};
 	ssize_t j, ret;
-
-	// do we have an LwIP file descriptor?
-	if (fd & LWIP_FD_BIT) {
-		spinlock_irqsave_lock(&lwip_lock);
-		ret = lwip_read(fd & ~LWIP_FD_BIT, buf, len);
-		spinlock_irqsave_unlock(&lwip_lock);
-		if (ret < 0)
-			return -errno;
-
-		return ret;
-	}
 
 	if (is_uhyve()) {
 
@@ -235,6 +224,17 @@ ssize_t sys_read(int fd, char* buf, size_t len)
 
 		return uhyve_args.ret;
 #endif
+	}
+
+	// do we have an LwIP file descriptor?
+	if (fd & LWIP_FD_BIT) {
+		spinlock_irqsave_lock(&lwip_lock);
+		ret = lwip_read(fd & ~LWIP_FD_BIT, buf, len);
+		spinlock_irqsave_unlock(&lwip_lock);
+		if (ret < 0)
+			return -errno;
+
+		return ret;
 	}
 
 	if (libc_sd < 0)
@@ -280,10 +280,56 @@ typedef struct {
 	size_t len;
 } __attribute__((packed)) uhyve_write_t;
 
+ssize_t uhyve_noncontiguous_write(int fd, const char *buf, size_t len) {
+	char *cur_buf = (char *)buf;
+	ssize_t bytes_written = 0;
+	size_t cur_len = 0;
+	uhyve_write_t arg = {fd, 0x0, 0x0};
+
+	while(len) {
+
+		if(!((size_t)cur_buf % PAGE_SIZE)) {
+			cur_len = (len < PAGE_SIZE) ? len : PAGE_SIZE;
+		} else {
+			cur_len = (((size_t)cur_buf + len) > PAGE_CEIL((size_t)cur_buf))
+				? (PAGE_CEIL((size_t)cur_buf) - (size_t)cur_buf) : len;
+		}
+
+		arg.buf = (char *)virt_to_phys((size_t)cur_buf);
+		arg.len = cur_len;
+		uhyve_send(UHYVE_PORT_WRITE, (unsigned)virt_to_phys((size_t)&arg));
+
+		if(arg.len == (size_t)(-1))
+			return -1;
+
+		bytes_written += arg.len;
+		if(arg.len != cur_len)
+			break;
+
+		cur_buf += cur_len;
+		len -= cur_len;
+	}
+
+	return bytes_written;
+}
+
 ssize_t sys_write(int fd, const char* buf, size_t len)
 {
 	if (BUILTIN_EXPECT(!buf, 0))
 		return -EINVAL;
+
+if (is_uhyve()) {
+
+		return uhyve_noncontiguous_write(fd, buf, len);
+
+#if 0
+		uhyve_write_t uhyve_args = {fd, (const char*) virt_to_phys((size_t) buf), len};
+
+		uhyve_send(UHYVE_PORT_WRITE, (unsigned)virt_to_phys((size_t)&uhyve_args));
+
+		return uhyve_args.len;
+#endif
+}
 
 	ssize_t i, ret;
 	sys_write_t sysargs = {__NR_write, fd, len};
