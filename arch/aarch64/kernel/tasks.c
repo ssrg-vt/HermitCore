@@ -43,6 +43,7 @@ extern const void tls_end;
 extern const void tdata_end;
 
 extern unsigned int forwarded_tls_size;
+extern uint32_t uart_mmio;
 
 extern atomic_int32_t cpu_online;
 extern atomic_int32_t current_boot_id;
@@ -63,7 +64,6 @@ typedef struct {
 
 static int init_tls(void)
 {
-	LOG_INFO("Init TLS\n");
 	task_t* curr_task = per_core(current_task);
 
 	// do we have a thread local storage?
