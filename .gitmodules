@@ -1,7 +1,7 @@
 [submodule "lwip"]
 	path = lwip
-	url = https://github.com/ssrg-vt/LwIP.git
-	branch = llvm-stable
+	url = https://github.com/hermitcore/LwIP.git
+	branch = hermit
 [submodule "usr/libomp"]
 	path = usr/libomp
 	url = https://github.com/hermitcore/libomp_oss.git
