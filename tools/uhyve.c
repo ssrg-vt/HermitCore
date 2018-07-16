@@ -193,6 +193,16 @@ static void uhyve_exit(void* arg)
 	close_fd(&vcpufd);
 }
 
+static void dump_log(void)
+{
+	if (klog && verbose)
+	{
+		fputs("\nDump kernel log:\n", stderr);
+		fputs("================\n", stderr);
+		fprintf(stderr, "%s\n", klog);
+	}
+}
+
 static void uhyve_atexit(void)
 {
 	uhyve_exit(NULL);
