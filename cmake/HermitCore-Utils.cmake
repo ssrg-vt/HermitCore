@@ -101,6 +101,7 @@ function(build_external NAME PATH DEPENDS)
 			-DCMAKE_EXPORT_COMPILE_COMMANDS=true
 			-DMAX_ARGC_ENVC=${MAX_ARGC_ENVC}
 			--no-warn-unused-cli
+			-target aarch64-hermit
 			${DO_PROFILING}
 			${CMD_VARS}
 			${ARGN})

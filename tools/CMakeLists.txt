@@ -18,6 +18,7 @@ set(SRC proxy.c
 	uhyve-migration.c
 	uhyve-x86_64.c
 	uhyve-aarch64.c
+	uhyve-gdb.c
 )
 
 ### Optional migration via RDMA

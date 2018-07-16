@@ -44,6 +44,13 @@
 
 #include <asm/irq.h>
 #include <asm/page.h>
+#include <asm/uhyve.h>
+
+typedef struct {
+	uint64_t rip;
+	uint64_t addr;
+	int success;
+} __attribute__ ((packed)) uhyve_pfault_t;
 
 /* Note that linker symbols are not variables, they have no memory
  * allocated for maintaining a value, rather their address is their value. */
@@ -213,16 +220,15 @@ int check_pagetables(size_t vaddr)
 	return 1;
 }
 
-
-int page_fault_handler(size_t viraddr)
+int page_fault_handler(size_t viraddr, size_t pc)
 {
 	task_t* task = per_core(current_task);
-
 	spinlock_irqsave_lock(&page_lock);
 
-	//:wpage_dump();
-
 	if ((task->heap) && (viraddr >= task->heap->start) && (viraddr < task->heap->end)) {
+		size_t flags;
+		int ret;
+
 		/*
 		 * do we have a valid page table entry? => flush TLB and return
 		 */
@@ -241,8 +247,8 @@ int page_fault_handler(size_t viraddr)
 			goto default_handler;
 		}
 
-		size_t flags = PG_USER|PG_RW;
-		int ret = __page_map(viraddr, phyaddr, 1, flags);
+		flags = PG_USER|PG_RW;
+		ret = __page_map(viraddr, phyaddr, 1, flags);
 
 		if (BUILTIN_EXPECT(ret, 0)) {
 			LOG_ERROR("map_region: could not map %#lx to %#lx, task = %u\n", phyaddr, viraddr, task->id);
@@ -258,6 +264,10 @@ int page_fault_handler(size_t viraddr)
 
 default_handler:
 	spinlock_irqsave_unlock(&page_lock);
+
+	/* indicate unrecoverable page fault to the hypervisor */
+	uhyve_pfault_t arg = {pc, viraddr, -1};
+	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
 
 	return -EINVAL;
 }

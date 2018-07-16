@@ -274,6 +274,7 @@ void do_sync(void *regs)
 	uint32_t esr = read_esr();
 	uint32_t ec = esr >> 26;
 	uint32_t iss = esr & 0xFFFFFF;
+	uint64_t pc = read_elr_el1();
 
         /* data abort from lower or current level */
 	if ((ec == 0b100100) || (ec == 0b100101)) {
@@ -282,14 +283,16 @@ void do_sync(void *regs)
 			/* read far_el1 register, which holds the faulting virtual address */
 			uint64_t far = read_far();
 
-			if (page_fault_handler(far) == 0)
+			if (page_fault_handler(far, pc) == 0)
 				return;
 
-			LOG_ERROR("Unable to handle page fault at 0x%llx\n", far);
 			LOG_ERROR("Exception return address 0x%llx\n", get_elr());
 			LOG_ERROR("Thread ID register 0x%llx\n", get_tpidr());
 			LOG_ERROR("Table Base Register 0x%llx\n", get_ttbr0());
 			LOG_ERROR("Exception Syndrome Register 0x%lx\n", esr);
+
+			LOG_ERROR("Unable to handle page fault at 0x%llx (PC @0x%llx)\n",
+					far, pc);
 
 			// send EOI
 			gicc_write(GICC_EOIR, iar);
@@ -298,13 +301,14 @@ void do_sync(void *regs)
 		} else {
 			LOG_ERROR("Unknown exception\n");
 		}
+	} else if (ec == 0x3c) {
+		LOG_ERROR("Trap to debugger, PC=0x%x\n", pc);
 	} else {
-		LOG_ERROR("Unsupported exception class\n");
+		LOG_ERROR("Unsupported exception class: 0x%x, PC=0x%x\n", ec, pc);
 	}
 
-	while (1) {
-		HALT;
-	}
+	sys_exit(-EFAULT);
+
 }
 
 size_t** do_fiq(void *regs)

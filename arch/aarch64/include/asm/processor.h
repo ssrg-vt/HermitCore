@@ -119,6 +119,39 @@ static inline size_t get_tpidr(void) {
 /** @brief Set thread id  register */
 static inline void set_tpidr(size_t addr) {
 	asm volatile("msr tpidr_el0, %0" :: "r"(addr));
+/** @brief Get thread local storage
+ *
+ * Helper function to get the TLS of the current task
+ */
+static inline size_t get_tls(void) {
+	uint64_t addr = 0;
+	asm volatile(
+		"mrs %0, tpidr_el0"
+		: "+r"(addr)
+		:
+		: );
+	return addr;
+}
+
+/** @brief Set thread local storage
+ *
+ * Helper function to set the TLS of the current task
+ */
+static inline void set_tls(size_t addr) {
+	asm volatile(
+		"msr tpidr_el0, %0"
+		: "=r"(addr)
+		:
+		: );
+}
+
+/** @brief Read elr_el1 register
+ * @return elr_el1's value
+ */
+static inline size_t read_elr_el1(void) {
+	size_t val;
+	asm volatile("mrs %0, elr_el1" : "=r"(val) :: "memory");
+	return val;
 }
 
 /** @brief Read id_aa64mmfr0_el1 register
