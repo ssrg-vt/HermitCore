@@ -177,9 +177,6 @@ add_dependencies(hermit libiomp)
 ## end of x86 specific part
 endif()
 
-## end of x86 specific part
-endif()
-
 ## Tests and benchmarks
 if("${TARGET_ARCH}" STREQUAL "x86_64-hermit")
 build_external(tests ${HERMIT_ROOT}/usr/tests hermit)

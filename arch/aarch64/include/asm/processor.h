@@ -119,6 +119,8 @@ static inline size_t get_tpidr(void) {
 /** @brief Set thread id  register */
 static inline void set_tpidr(size_t addr) {
 	asm volatile("msr tpidr_el0, %0" :: "r"(addr));
+}
+
 /** @brief Get thread local storage
  *
  * Helper function to get the TLS of the current task
