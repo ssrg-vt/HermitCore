@@ -99,6 +99,7 @@ __thread int vcpufd = -1;
 __thread uint32_t cpuid = 0;
 static sem_t net_sem;
 static bool uhyve_gdb_enabled = false;
+static bool uhyve_gdb_initialized = false;
 
 int uhyve_argc = -1;
 int uhyve_envc = -1;
@@ -284,6 +285,15 @@ static int vcpu_loop(void)
 		restore_cpu_state(vcpu_thread_states[cpuid]);
 	} else {
 		init_cpu_state(elf_entry);
+	}
+
+	/* init gdb support */
+	if(uhyve_gdb_enabled && !uhyve_gdb_initialized) {
+#ifdef __aarch64__
+		uhyve_aarch64_find_pt_root(program_name);
+#endif
+		uhyve_gdb_init(vcpufd);
+		uhyve_gdb_initialized = true;
 	}
 
 	if (cpuid == 0) {
@@ -832,15 +842,7 @@ int uhyve_loop(int argc, char **argv)
 		/* Start a virtual timer. It counts down whenever this process is executing. */
 		setitimer(ITIMER_REAL, &timer, NULL);
 	}
-
-	/* init gdb support */
-	if(uhyve_gdb_enabled) {
-#ifdef __aarch64__
-		uhyve_aarch64_find_pt_root(program_name);
-#endif
-		uhyve_gdb_init(vcpufd);
-	}
-
+	
 	// Run first CPU
 	return vcpu_loop();
 }

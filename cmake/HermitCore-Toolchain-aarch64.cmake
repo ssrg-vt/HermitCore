@@ -16,7 +16,7 @@ set(HERMIT_KERNEL_FLAGS
 					-fno-strict-overflow -target aarch64-hermit)
 
 set(HERMIT_APP_FLAGS
-					-O3 -ftree-vectorize -target aarch64-hermit -fopenmp=libgomp)
+					-O3 -g -ftree-vectorize -target aarch64-hermit -fopenmp=libgomp)
 
 set(CMAKE_SYSTEM_NAME Generic)
 
