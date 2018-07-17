@@ -68,12 +68,14 @@
 #include "uhyve-migration.h"
 #include "uhyve-net.h"
 #include "proxy.h"
+#include "uhyve-gdb.h"
 
 static bool restart = false;
 static bool migration = false;
 static pthread_t net_thread;
 static int* vcpu_fds = NULL;
 static pthread_mutex_t kvm_lock = PTHREAD_MUTEX_INITIALIZER;
+static char *program_name;
 
 extern bool verbose;
 
@@ -82,9 +84,6 @@ size_t guest_size = 0x20000000ULL;
 bool full_checkpoint = false;
 pthread_barrier_t barrier;
 pthread_barrier_t migration_barrier;
-#include "uhyve-gdb.h"
-
-static char *program_name;
 
 pthread_t* vcpu_threads = NULL;
 uint8_t* klog = NULL;
@@ -522,8 +521,6 @@ static int vcpu_loop(void)
 			fprintf(stderr, "KVM: receive shutdown command\n");
 
 		case KVM_EXIT_DEBUG:
-			print_registers();
-			exit(EXIT_FAILURE);
 			if(uhyve_gdb_enabled) {
 				uhyve_gdb_handle_exception(vcpufd, GDB_SIGNAL_TRAP);
 				break;
