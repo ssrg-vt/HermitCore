@@ -259,10 +259,6 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		return 0;
 	}
 
-	/* indicate unrecoverable page fault to the hypervisor */
-	uhyve_pfault_t arg = {pc, viraddr, -1};
-	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
-
 default_handler:
 	spinlock_irqsave_unlock(&page_lock);
 

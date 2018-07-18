@@ -259,37 +259,6 @@ out:
 	return ret;
 }
 
-
-/* Walk the guest page table to translate a guest virtual into a guest physical
- * address. This works only for 4KB granule and 4KB pages */
-uint64_t virt_to_phys(uint64_t vaddr) {
-	uint64_t pt0_index, pt1_index, pt2_index, pt3_index, paddr;
-	uint64_t *pt0_addr, *pt1_addr, *pt2_addr, *pt3_addr;
-
-	/* Compute index in level 0 PT: bits 39 to 47 */
-	pt0_index = (vaddr & 0xFF8000000000) >> 39;
-	/* Compute index in level 1 PT: bits 30 to 38 */
-	pt1_index = (vaddr & 0x7FC0000000) >> 30;
-	/* Compute index in level 2 PT: bits 21 to 29 */
-	pt2_index = (vaddr & 0x3FE00000) >> 21;
-	/* Compute index in level 3 PT: bits 12 to 20 */
-	pt3_index = (vaddr & 0x1FF000) >> 12;
-
-	/* Now find page table addresses at each level */
-	pt0_addr = (uint64_t *)((PT_ROOT + (uint64_t)guest_mem) & PT_ADDR_MASK);
-	pt1_addr = (uint64_t *)((pt0_addr[pt0_index] & PT_ADDR_MASK) +
-			(uint64_t)guest_mem);
-	pt2_addr = (uint64_t *)((pt1_addr[pt1_index] & PT_ADDR_MASK) +
-			(uint64_t)guest_mem);
-	pt3_addr = (uint64_t *)((pt2_addr[pt2_index] & PT_ADDR_MASK) +
-			(uint64_t)guest_mem);
-
-	/* last level page table gives us the physical page and we add the offset */
-	paddr = pt3_addr[pt3_index] & PT_ADDR_MASK;
-	paddr = paddr | (vaddr & 0xFFF);
-
-	return paddr;
-}
 void print_registers(void)
 {
 	struct kvm_one_reg reg;
