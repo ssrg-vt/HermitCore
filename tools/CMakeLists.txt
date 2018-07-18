@@ -5,7 +5,7 @@ include(../cmake/HermitCore-Paths.cmake)
 SET(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
 add_compile_options(-std=c99 -g)
 
-add_executable(proxy proxy.c utils.c uhyve.c uhyve-net.c uhyve-x86_64.c uhyve-aarch64.c uhyve-migration.c)
+add_executable(proxy proxy.c utils.c uhyve.c uhyve-net.c uhyve-x86_64.c uhyve-aarch64.c uhyve-gdb.c uhyve-migration.c)
 target_compile_options(proxy PUBLIC -pthread)
 target_compile_options(proxy PUBLIC -DMAX_ARGC_ENVC=${MAX_ARGC_ENVC})
 target_link_libraries(proxy -pthread)

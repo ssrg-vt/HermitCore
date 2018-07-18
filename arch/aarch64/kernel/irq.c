@@ -302,14 +302,7 @@ void do_sync(void *regs)
 		LOG_ERROR("Unsupported exception class: 0x%x, PC=0x%x\n", ec, pc);
 	}
 
-	/* Let's abort rather than perform an infinite loop */
 	sys_exit(-EFAULT);
-
-#if 0
-	while (1) {
-		HALT;
-	}
-#endif
 }
 
 size_t** do_fiq(void *regs)
