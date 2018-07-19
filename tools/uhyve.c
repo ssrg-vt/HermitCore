@@ -724,13 +724,13 @@ int uhyve_loop(int argc, char **argv)
 		setitimer(ITIMER_REAL, &timer, NULL);
 	}
 
-	/* init gdb support */
-	if(uhyve_gdb_enabled) {
 #ifdef __aarch64__
 		uhyve_aarch64_find_pt_root(program_name);
 #endif
+
+	/* init gdb support */
+	if(uhyve_gdb_enabled)
 		uhyve_gdb_init(vcpufd);
-	}
 
 	// Run first CPU
 	return vcpu_loop();
