@@ -28,9 +28,11 @@ int stack_slots_init(void) {
 	stack_slots_size =  STACK_SLOTS_NUM * DEFAULT_STACK_SIZE;
 	stack_slots = (void *)STACK_SLOTS_START;
 
-	MIGLOG("Stack slots: trying to reserve area 0x%x -> 0x%x (%u slots, %u "
-			"pages, 0x%x bytes)\n", stack_slots, stack_slots + stack_slots_size,
-			STACK_SLOTS_NUM, stack_slots_size/PAGE_SIZE, stack_slots_size);
+	MIGLOG("Stack slots: trying to reserve area 0x%x -> 0x%x\n", stack_slots,
+			stack_slots + stack_slots_size);
+	MIGLOG("Stack slots: %u slots, %u pages, 0x%x bytes, 0x%x per slot)\n",
+			STACK_SLOTS_NUM, stack_slots_size/PAGE_SIZE, stack_slots_size,
+			DEFAULT_STACK_SIZE);
 
 	return 0;
 }
