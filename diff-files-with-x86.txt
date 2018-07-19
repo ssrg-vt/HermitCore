@@ -1,2 +1,0 @@
-M	arch/x86/kernel/tasks.c:
-  - implement create_resume_frame for aarch64
