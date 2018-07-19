@@ -111,6 +111,10 @@ uint64_t aarch64_virt_to_phys(uint64_t vaddr) {
 	uint64_t pt0_index, pt1_index, pt2_index, pt3_index, paddr;
 	uint64_t *pt0_addr, *pt1_addr, *pt2_addr, *pt3_addr;
 
+	if(!pt_root)
+		errx(-1, "Calling aarch64_virt_to_phys but pt_root is not set, "
+				"exiting\n");
+
 	/* There is a direct virt to phys mapping for all the static memory, so
 	 * we can take the quick path here. This is especially helpful when initial
 	 * breakpoints are set (when the debugger connects before the guest starts
@@ -549,7 +553,8 @@ int uhyve_aarch64_find_pt_root(char *binary_path) {
 		int ret = find_symbol_addr(PT_ROOT_SYMNAME, binary_path, &pt_root);
 		if(ret)
 			errx(-1, "Cannot find page table root symbol address: %d\n", ret);
-		printf("Found page table root at 0x%llx\n", pt_root);
+		if(verbose)
+			printf("Found page table root at 0x%llx\n", pt_root);
 		fflush(stdout);
 }
 
