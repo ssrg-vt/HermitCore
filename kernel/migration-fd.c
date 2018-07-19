@@ -69,6 +69,10 @@ int migrate_restore_fds(const char *filename) {
 
 	nelems = filesize/sizeof(migration_fd_t);
 	local_fd_array = kmalloc(nelems * sizeof(migration_fd_t));
+	if(!local_fd_array) {
+		MIGERR("FD migration: cannot allocate memory\n");
+		return -ENOMEM;
+	}
 
 	if(sys_read(fd, (char *)local_fd_array, nelems*sizeof(migration_fd_t)) !=
 			nelems*sizeof(migration_fd_t)) {
