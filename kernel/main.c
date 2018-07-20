@@ -142,12 +142,13 @@ static int hermit_init(void)
 	return 0;
 }
 
+#ifdef __x86_64__
 static void tcpip_init_done(void* arg)
 {
 	sys_sem_t* sem = (sys_sem_t*)arg;
 
 	LOG_INFO("LwIP's tcpip thread has task id %d\n", per_core(current_task)->id);
-	set_lwip_thread_id(id);
+	set_lwip_thread_id(per_core(current_task)->id);
 
 	sys_sem_signal(sem);
 }

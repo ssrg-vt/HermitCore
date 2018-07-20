@@ -199,30 +199,30 @@ int page_unmap(size_t viraddr, size_t npages)
 	return 0;
 }
 
-int page_fault_handler(size_t viraddr)
+int check_pagetables(size_t vaddr) {
+	int lvl;
+	ssize_t vpn = vaddr >> PAGE_BITS;
+	ssize_t index[PAGE_LEVELS];
+
+	/* Calculate index boundaries for page map traversal */
+	for (lvl=0; lvl<PAGE_LEVELS; lvl++)
+		index[lvl] = vpn >> (lvl * PAGE_MAP_BITS);
+
+	/* do we have already a valid entry in the page tables */
+	for (lvl=PAGE_LEVELS-1; lvl>=0; lvl--) {
+		vpn = index[lvl];
+
+		if (!self[lvl][vpn])
+			return 0;
+	}
+
+	return 1;
+}
+
+
+int page_fault_handler(size_t viraddr, size_t pc)
 {
 	task_t* task = per_core(current_task);
-
-	int check_pagetables(size_t vaddr)
-	{
-		int lvl;
-		ssize_t vpn = vaddr >> PAGE_BITS;
-		ssize_t index[PAGE_LEVELS];
-
-		/* Calculate index boundaries for page map traversal */
-		for (lvl=0; lvl<PAGE_LEVELS; lvl++)
-			index[lvl] = vpn >> (lvl * PAGE_MAP_BITS);
-
-		/* do we have already a valid entry in the page tables */
-		for (lvl=PAGE_LEVELS-1; lvl>=0; lvl--) {
-			vpn = index[lvl];
-
-			if (!self[lvl][vpn])
-				return 0;
-		}
-
-		return 1;
-	}
 
 	spinlock_irqsave_lock(&page_lock);
 
@@ -303,6 +303,7 @@ static inline page_entry_t* get_child_entry(page_entry_t *entry)
 	return (page_entry_t*) child;
 }
 
+#if 0
 /** @brief Get the base address of the parent entry
  *
  * @param entry The child entry
@@ -318,6 +319,43 @@ static inline page_entry_t* get_parent_entry(page_entry_t *entry)
 
 	return (page_entry_t*) parent;
 }
+#endif
+
+static void page_dump_print(size_t start, size_t end, size_t flags) {
+	size_t size = end - start;
+
+	kprintf("%#018lx-%#018lx %#14x 0x%zx\n", start, end, size, flags);
+}
+
+static void page_dump_traverse(int level, page_entry_t* entry, size_t *flags,
+		size_t *start, size_t *end) {
+	page_entry_t* stop = entry + PAGE_MAP_ENTRIES;
+	for (; entry != stop; entry++) {
+		if (*entry) {
+			if (level) { // do "pre-order" traversal
+				// TODO: handle "inheritance" of page table flags (see get_page_flags())
+				page_dump_traverse(level-1, get_child_entry(entry), flags, start, end);
+			} else {
+				if (!(*flags)) {
+					*flags = *entry & 0xFFFF000000000FFFULL;
+					*start = entry_to_virt(entry, level);
+				}
+				else if (*flags != (*entry & 0xFFFF000000000FFFULL)) {
+					*end = entry_to_virt(entry, level);
+					page_dump_print(*start, *end, *flags);
+
+					*flags = *entry & 0xFFFF000000000FFFULL;
+					*start = *end;
+				}
+			}
+		}
+		else if (*flags) {
+			*end = entry_to_virt(entry, level);
+			page_dump_print(*start, *end, *flags);
+			*flags = 0;
+		}
+	}
+}
 
 void page_dump(void)
 {
@@ -325,47 +363,13 @@ void page_dump(void)
 	size_t start = 0;
 	size_t end;
 
-	void print(size_t start, size_t end, size_t flags) {
-		size_t size = end - start;
-
-		kprintf("%#018lx-%#018lx %#14x 0x%zx\n", start, end, size, flags);
-	}
-
-	void traverse(int level, page_entry_t* entry) {
-		page_entry_t* stop = entry + PAGE_MAP_ENTRIES;
-		for (; entry != stop; entry++) {
-			if (*entry) {
-				if (level) { // do "pre-order" traversal
-					// TODO: handle "inheritance" of page table flags (see get_page_flags())
-					traverse(level-1, get_child_entry(entry));
-				} else {
-					if (!flags) {
-						flags = *entry & 0xFFFF000000000FFFULL;
-						start = entry_to_virt(entry, level);
-					}
-					else if (flags != (*entry & 0xFFFF000000000FFFULL)) {
-						end = entry_to_virt(entry, level);
-						print(start, end, flags);
-
-						flags = *entry & 0xFFFF000000000FFFULL;
-						start = end;
-					}
-				}
-			}
-			else if (flags) {
-				end = entry_to_virt(entry, level);
-				print(start, end, flags);
-				flags = 0;
-			}
-		}
-	}
-
 	kprintf("%-18s-%18s %14s %-6s\n", "start", "end", "size", "flags"); // header
 
-	traverse(PAGE_LEVELS-1, (page_entry_t*) 0x0000FFFFFFFFF000ULL);
+	page_dump_traverse(PAGE_LEVELS-1, (page_entry_t*) 0x0000FFFFFFFFF000ULL,
+			&flags, &start, &end);
 
 	if (flags) // workaround to print last mapping
-		print(start, 0L, flags);
+		page_dump_print(start, 0L, flags);
 }
 
 int page_init(void)

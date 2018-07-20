@@ -127,8 +127,9 @@ install(DIRECTORY include/hermit
 	FILES_MATCHING
 		PATTERN *.h)
 
-install(FILES tools/init.sh
-        DESTINATION tools)
+# Pierre: we don't need that
+#install(FILES tools/init.sh
+#        DESTINATION tools)
 
 # provide custom target to only install libhermit without its runtimes which is
 # needed during the compilation of the cross toolchain
@@ -176,9 +177,6 @@ add_dependencies(hermit libiomp)
 ## XRay profiler
 #build_external(xray ${HERMIT_ROOT}/usr/xray "")
 #add_dependencies(hermit xray)
-
-## end of x86 specific part
-endif()
 
 ## end of x86 specific part
 endif()

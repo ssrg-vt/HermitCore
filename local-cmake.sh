@@ -14,6 +14,7 @@ mkdir build
 cd build
 
 cmake -DHERMIT_ARCH=aarch64 \
+	-DTARGET_ARCH=aarch64-hermit \
 	-DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
 	-DCOMPILER_BIN_DIR=$INSTALL_PATH/x86_64-host/bin \
 	-DHERMIT_PREFIX=$INSTALL_PATH/x86_64-host \

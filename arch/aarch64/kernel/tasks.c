@@ -60,7 +60,7 @@ typedef struct {
 	void *privat;	/* private */
 } thread_block_t;
 
-static int init_tls(void)
+int init_tls(void)
 {
 	task_t* curr_task = per_core(current_task);
 

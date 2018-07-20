@@ -45,7 +45,7 @@
 #define PAGE_BITS		12
 #define PAGE_2M_BITS		21
 /// The size of a single page in bytes
-#define PAGE_SIZE		( 1L << PAGE_BITS)
+#define PAGE_SIZE		4096
 #define PAGE_MASK		((~0L) << PAGE_BITS)
 #define PAGE_2M_MASK		((~0L) << PAGE_2M_BITS)
 

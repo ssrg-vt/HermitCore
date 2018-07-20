@@ -149,7 +149,11 @@ int restore_tls(uint64_t tls_size, int mig_id) {
 			MIGERR("Migration: cannot allocate TLS\n");
 			return -1;
 		}
+#ifdef __aarch64__
+		local_tls_start = get_tpidr();
+#else
 		local_tls_start = get_tls();
+#endif
 		ksprintf(tls_chkpt_file, "%s.%d", CHKPT_TLS_FILE, mig_id);
 		return migrate_restore_area(tls_chkpt_file, local_tls_start-tls_size,
 				tls_size);
@@ -175,7 +179,13 @@ int save_stack(uint64_t rsp) {
 int save_tls(uint64_t tls_size, int task_id) {
 	if(tls_size > 0) {
 		char tls_chkpt_file[32];
-		uint64_t local_tls_start = get_tls();
+		uint64_t local_tls_start;
+
+#ifdef __aarch64__
+		local_tls_start = get_tpidr();
+#else
+		local_tls_start = get_tls();
+#endif
 
 		ksprintf(tls_chkpt_file, "%s.%d", CHKPT_TLS_FILE, task_id);
 		return migrate_chkpt_area(local_tls_start-tls_size, tls_size,

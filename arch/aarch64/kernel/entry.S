@@ -34,7 +34,7 @@
 #define MAIR(attr, mt)  ((attr) << ((mt) * 8))
 
 #define PAGE_SHIFT	12
-#define PAGE_SIZE	(1 << PAGE_SHIFT)
+#define PAGE_SIZE	4096
 #define PAGE_MASK	(~(PAGE_SIZE-1))
 
 /*
@@ -104,6 +104,7 @@ cpu_online: .xword 0
 possible_cpus: .xword 0
 .global current_boot_id
 current_boot_id: .xword 0
+.global isle
 isle: .xword -1
 .global possible_isles
 possible_isles: .xword 1

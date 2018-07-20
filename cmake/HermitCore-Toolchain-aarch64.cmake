@@ -8,14 +8,13 @@ set_default(HERMIT_PREFIX /opt/hermit)
 set_default(COMPILER_BIN_DIR ${HERMIT_PREFIX}/usr/local/bin)
 
 # Flags not supported by clang/llvm: -finline-functions -falign-jumps=1
-# -falign-loops=1
+# -falign-loops=1 -fno-var-tracking-assignments -fno-delete-null-pointer-check
+# -fstrength-reduce
 set(TARGET_ARCH aarch64-hermit)
 set(HERMIT_KERNEL_FLAGS
 					-Wall -O2 -g -mgeneral-regs-only
-					-fno-var-tracking-assignments -fstrength-reduce
 					-fomit-frame-pointer -ffreestanding
 					-nostdinc -fno-stack-protector
-					-fno-delete-null-pointer-checks
 					-fno-common -Wframe-larger-than=2048
 					-fno-strict-aliasing -fno-asynchronous-unwind-tables
 					-fno-strict-overflow -target aarch64-hermit
