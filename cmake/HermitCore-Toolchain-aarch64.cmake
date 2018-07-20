@@ -22,8 +22,22 @@ set(HERMIT_KERNEL_FLAGS
 					-Wno-asm-operand-widths
 					-Wno-shift-negative-value)
 
+# Pierre: debug options and migration log
+if(KERNEL_DEBUG)
+	set(HERMIT_KERNEL_FLAGS
+		-g -ggdb3 -O0 ${HERMIT_KERNEL_FLAGS})
+else(KERNEL_DEBUG)
+	set(HERMIT_KERNEL_FLAGS
+		-O2 -fno-schedule-insns -fno-schedule-insns2 ${HERMIT_KERNEL_FLAGS})
+endif(KERNEL_DEBUG)
+
+if(MIGRATION_LOG)
+	set(HERMIT_KERNEL_FLAGS
+		-DHAVE_MIG_LOG ${HERMIT_KERNEL_FLAGS})
+endif(MIGRATION_LOG)
+
 set(HERMIT_APP_FLAGS
-					-O2 -ftree-vectorize -target aarch64-hermit -fopenmp=libgomp)
+	-O2 -ftree-vectorize -target aarch64-hermit -fopenmp=libgomp)
 
 set(CMAKE_SYSTEM_NAME Generic)
 
