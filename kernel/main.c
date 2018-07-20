@@ -90,7 +90,7 @@ static const int sobufsize = 131072;
  * maintaining a value, rather their address is their value.
  */
 extern const void kernel_start;
-extern const void hbss_start;
+extern const void tdata_end;
 extern const void tls_start;
 extern const void tls_end;
 extern const void __bss_start;
@@ -122,7 +122,7 @@ static int hermit_init(void)
 	size_t sz = (size_t) &percore_end0 - (size_t) &percore_start;
 
 	// initialize .kbss sections
-	memset((void*)&hbss_start, 0x00, (size_t) &__bss_start - (size_t) &hbss_start);
+	memset((void*)&tdata_end, 0x00, (size_t) &__bss_start - (size_t) &tdata_end);
 
 	// initialize .percore section => copy first section to all other sections
 	for(i=1; i<MAX_CORES; i++)
@@ -130,6 +130,7 @@ static int hermit_init(void)
 
 	migrate_init();
 	koutput_init();
+
 	system_init();
 	irq_init();
 	timer_init();
@@ -141,7 +142,6 @@ static int hermit_init(void)
 	return 0;
 }
 
-#ifdef __x86_64__
 static void tcpip_init_done(void* arg)
 {
 	sys_sem_t* sem = (sys_sem_t*)arg;
@@ -580,6 +580,81 @@ out:
 	return 0;
 }
 
+//#define MEASURE_CONTEXT
+
+#ifdef MEASURE_CONTEXT
+
+#define N	10000
+volatile int finished = 0;
+volatile int started1 = 0;
+volatile int started2 = 0;
+
+static int dummy_task(void* arg)
+{
+	kprintf("Enter dummy loop at core %d\n", CORE_ID);
+
+	// cache warm up
+	reschedule();
+	reschedule();
+
+	// synchronize start
+	started2 = 1;
+	mb();
+	while(started1 == 0)
+		reschedule();
+
+	while (finished == 0)
+	{
+		reschedule();
+	}
+
+	kprintf("Leave dummy loop\n");
+
+	return 0;
+}
+
+static int measure_context(void* arg)
+{
+	unsigned long long start, end;
+
+	kprintf("Enter function at core %d to measure the time for a context switch\n", CORE_ID);
+
+	// cache warm up
+	reschedule();
+	reschedule();
+
+	// synchronize start
+	started1 = 1;
+	mb();
+	while(started2 == 0)
+	reschedule();
+
+	// Save the current Time Stamp Counter value and switch to the second task.
+	start = rdtsc();
+	mb();
+
+	for(uint32_t i = 0; i < N; i++)
+	{
+		reschedule();
+	}
+
+	// Calculate the cycle difference and add it to the sum.
+	end = rdtsc();
+	mb();
+
+	finished = 1;
+
+	reschedule();
+	reschedule();
+
+	kprintf("Average time for a task switch: %lld cycles\n", (end - start) / (N * 2));
+
+	sys_exit(0);
+
+	return 0;
+}
+#endif
+
 int hermit_main(void)
 {
 	unsigned int id;
@@ -590,8 +665,8 @@ int hermit_main(void)
 	LOG_INFO("This is Hermit %s, build on %s\n", PACKAGE_VERSION, __DATE__);
 	//LOG_INFO("Isle %d of %d possible isles\n", isle, possible_isles);
 	LOG_INFO("Kernel starts at %p and ends at %p\n", &kernel_start, (size_t)&kernel_start + image_size);
-	//LOG_INFO("TLS image starts at %p and ends at %p (size 0x%zx)\n", &tls_start, &tls_end, ((size_t) &tls_end) - ((size_t) &tls_start));
-	LOG_INFO("BBS starts at %p and ends at %p\n", &hbss_start, (size_t)&kernel_start + image_size);
+	LOG_INFO("TLS image starts at %p and ends at %p (size 0x%zx)\n", &tls_start, &tls_end, ((size_t) &tls_end) - ((size_t) &tls_start));
+	LOG_INFO("BBS starts at %p and ends at %p\n", &tdata_end, (size_t)&kernel_start + image_size);
 	LOG_INFO("Per core data starts at %p and ends at %p\n", &percore_start, &percore_end);
 	LOG_INFO("Per core size 0x%zx\n", (size_t) &percore_end0 - (size_t) &percore_start);
 	if (get_cpu_frequency() > 0)
@@ -624,10 +699,15 @@ int hermit_main(void)
 	if(stack_slots_init())
 		DIE();
 
+#ifdef MEASURE_CONTEXT
+	create_kernel_task_on_core(NULL, dummy_task, NULL, NORMAL_PRIO, boot_processor);
+	create_kernel_task_on_core(NULL, measure_context, NULL, NORMAL_PRIO, boot_processor);
+#else
 	create_kernel_task_on_core((tid_t *)&id, initd, NULL, NORMAL_PRIO, boot_processor);
 
 	/* Keep track of main thread id for migration */
 	set_primary_thread_id(id);
+#endif
 
 	while(1) {
 		check_workqueues();

@@ -40,6 +40,7 @@
 #include <asm/multiboot.h>
 #include <asm/irqflags.h>
 
+#define TLS_OFFSET		8
 #define TLS_ALIGNBITS		5
 #define TLS_ALIGNSIZE		(1L << TLS_ALIGNBITS)
 #define TSL_ALIGNMASK		((~0L) << TLS_ALIGNBITS)
@@ -85,6 +86,18 @@ static int init_tls(void)
 	} else set_tls(0); // no TLS => clear fs register
 
 	return 0;
+}
+
+void destroy_tls(void)
+{
+	task_t* curr_task = per_core(current_task);
+
+	// do we need to release the TLS?
+	void* tls_addr = (void*)get_tls();
+	if (tls_addr) {
+		//LOG_INFO("Release TLS at %p\n", (char*)tls_addr - curr_task->tls_size);
+		kfree((char*)tls_addr - curr_task->tls_size - TLS_OFFSET);
+	}
 }
 
 static int thread_entry(void* arg, size_t ep)
@@ -197,11 +210,17 @@ int create_default_frame(task_t* task, entry_point_t ep, void* arg, uint32_t cor
 
 void wait_for_task(void)
 {
+	irq_disable();
+	if (is_task_available()) {
+		irq_enable();
+		return;
+	}
+
 #ifndef USE_MWAIT
-	HALT;
+	asm volatile ("sti; hlt" ::: "memory");
 #else
 	if (!has_mwait()) {
-		HALT;
+		asm volatile ("sti; hlt" ::: "memory");
 	} else {
 		void* queue = get_readyqueue();
 
@@ -209,7 +228,13 @@ void wait_for_task(void)
 			clflush(queue);
 
 		monitor(queue, 0, 0);
-		mwait(0x2 /* 0x2 = c3, 0xF = c0 */, 1 /* break on interrupt flag */);
+
+		/*
+		 * NOTE: we use the ecx=0 => we
+		 * handle the IRQ and not just wake from it.
+		 */
+		asm volatile("sti; mwait" :: "a" (0x2) /* 0x2 = c3, 0xF = c0 */,
+			"c" (0) /* break on interrupt flag */ : "memory");
 	}
 #endif
 }

@@ -52,8 +52,6 @@ extern atomic_int32_t cpu_online;
 
 volatile uint32_t go_down = 0;
 
-#define TLS_OFFSET	8
-
 /* Migration metadata used on resume path */
 chkpt_metadata_t resume_md;
 
@@ -86,7 +84,7 @@ DEFINE_PER_CORE(uint32_t, __core_id, 0);
 #ifdef __x86_64__
 static void update_timer(task_t* first)
 {
-	if(first) {
+	if (first) {
 		if(first->timeout > get_clock_tick()) {
 			timer_deadline((uint32_t) (first->timeout - get_clock_tick()));
 		} else {
@@ -133,9 +131,9 @@ static void timer_queue_push(uint32_t core_id, task_t* task)
 		timer_queue->first = timer_queue->last = task;
 		task->next = task->prev = NULL;
 
-        #ifdef DYNAMIC_TICKS
-		    update_timer(task);
-        #endif
+#ifdef DYNAMIC_TICKS
+		update_timer(task);
+#endif
 	} else {
 		// lookup position where to insert task
 		task_t* tmp = first;
@@ -161,9 +159,9 @@ static void timer_queue_push(uint32_t core_id, task_t* task)
 			if(timer_queue->first == tmp) {
 				timer_queue->first = task;
 
-                #ifdef DYNAMIC_TICKS
-				    update_timer(task);
-                #endif
+#ifdef DYNAMIC_TICKS
+				update_timer(task);
+#endif
 			}
 		}
 	}
@@ -225,11 +223,15 @@ void fpu_handler(void)
 	restore_fpu_state(&task->fpu);
 }
 
+int is_task_available(void)
+{
+	uint32_t core_id = CORE_ID;
+
+	return readyqueues[core_id].nr_tasks > 0 ? 1 : 0;
+}
+
 void check_scheduling(void)
 {
-	if (!is_irq_enabled())
-		return;
-
 	uint32_t prio = get_highest_priority();
 	task_t* curr_task = per_core(current_task);
 
@@ -378,7 +380,6 @@ void finish_task_switch(void)
 void NORETURN do_exit(int arg)
 {
 	task_t* curr_task = per_core(current_task);
-	void* tls_addr = NULL;
 	const uint32_t core_id = CORE_ID;
 
 	LOG_INFO("Terminate task: %u, return value %d\n", curr_task->id, arg);
@@ -390,16 +391,10 @@ void NORETURN do_exit(int arg)
 	readyqueues[core_id].nr_tasks--;
 	spinlock_irqsave_unlock(&readyqueues[core_id].lock);
 
-	// do we need to release the TLS?
-	tls_addr = (void*)get_tls();
-	if (tls_addr) {
-		//LOG_INFO("Release TLS at %p\n", (char*)tls_addr - curr_task->tls_size);
-		kfree((char*)tls_addr - curr_task->tls_size - TLS_OFFSET);
-	}
+	// release the thread local storage
+	destroy_tls();
 
 	curr_task->status = TASK_FINISHED;
-
-	dec_running_threads();
 
 	reschedule();
 
@@ -745,10 +740,8 @@ int wakeup_task(tid_t id)
 	task_t* task;
 	uint32_t core_id;
 	int ret = -EINVAL;
-	uint8_t flags;
 
-	flags = irq_nested_disable();
-
+	spinlock_irqsave_lock(&table_lock);
 	task = &task_table[id];
 	core_id = task->last_core;
 
@@ -756,6 +749,8 @@ int wakeup_task(tid_t id)
 		LOG_DEBUG("wakeup task %d on core %d\n", id, core_id);
 
 		task->status = TASK_READY;
+		spinlock_irqsave_unlock(&table_lock);
+
 		ret = 0;
 
 		spinlock_irqsave_lock(&readyqueues[core_id].lock);
@@ -780,9 +775,9 @@ int wakeup_task(tid_t id)
 		LOG_DEBUG("update nr_tasks on core %d to %d\n", core_id, readyqueues[core_id].nr_tasks);
 
 		spinlock_irqsave_unlock(&readyqueues[core_id].lock);
+	} else {
+		spinlock_irqsave_unlock(&table_lock);
 	}
-
-	irq_nested_enable(flags);
 
 	return ret;
 }
@@ -878,6 +873,13 @@ void check_timers(void)
 		// pops task from timer queue, so next iteration has new first element
 		wakeup_task(task->id);
 	}
+
+#ifdef DYNAMIC_TICKS
+	task = readyqueue->timers.first;
+	if (task) {
+		update_timer(task);
+	}
+#endif
 
 	spinlock_irqsave_unlock(&readyqueue->lock);
 }

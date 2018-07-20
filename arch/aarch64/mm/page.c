@@ -55,7 +55,6 @@ typedef struct {
 /* Note that linker symbols are not variables, they have no memory
  * allocated for maintaining a value, rather their address is their value. */
 extern const void kernel_start;
-extern const void kernel_end;
 
 extern size_t l0_pgtable;
 
@@ -99,8 +98,8 @@ int page_set_flags(size_t viraddr, uint32_t npages, int flags)
 int __page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t bits)
 {
 	int lvl, ret = -ENOMEM;
-	long vpn = viraddr >> PAGE_BITS;
-	long first[PAGE_LEVELS], last[PAGE_LEVELS];
+	ssize_t vpn = viraddr >> PAGE_BITS;
+	ssize_t first[PAGE_LEVELS], last[PAGE_LEVELS];
 	size_t page_counter = 0;
 	size_t cflags = 0;
 
@@ -130,7 +129,7 @@ int __page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t bits)
 					self[lvl][vpn] = phyaddr | PT_PT;
 
 					/* Fill new table with zeros */
-					//LOG_INFO("Clear new page table at %p\n", &self[lvl-1][vpn<<PAGE_MAP_BITS]);
+					//LOG_INFO("Clear new page table at %p for 0x%zx, %d\n", &self[lvl-1][vpn<<PAGE_MAP_BITS], viraddr, lvl-1);
 					tlb_flush_range((size_t) (&self[lvl-1][vpn<<PAGE_MAP_BITS]),
 						((size_t)(&self[lvl-1][vpn<<PAGE_MAP_BITS]))+PAGE_SIZE);
 					memset(&self[lvl-1][vpn<<PAGE_MAP_BITS], 0, PAGE_SIZE);
@@ -140,10 +139,14 @@ int __page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t bits)
 					kprintf("Remap address 0x%zx at core %d\n", viraddr, CORE_ID);
 				}*/
 
-				if (!cflags && !(viraddr & 0XFFFFULL) && (npages-page_counter >= 16))
-					cflags = PT_CONTIG;
-				else if (cflags && !(viraddr & 0xFFFFULL) && (npages-page_counter < 16))
-					cflags = 0;
+#if 0
+				if ((viraddr & 0xFFFFULL) == 0) {
+					if ((ssize_t)npages-(ssize_t)page_counter >= 16)
+						cflags = PT_CONTIG;
+					else if ((ssize_t)npages-(ssize_t)page_counter < 16)
+						cflags = 0;
+				}
+#endif
 
 				if (bits & PG_DEVICE)
 					self[lvl][vpn] = phyaddr | PT_DEVICE | cflags;
@@ -196,36 +199,36 @@ int page_unmap(size_t viraddr, size_t npages)
 	return 0;
 }
 
-int check_pagetables(size_t vaddr)
-{
-	int lvl;
-	long vpn = vaddr >> PAGE_BITS;
-	long index[PAGE_LEVELS];
-
-	/* Calculate index boundaries for page map traversal */
-	for (lvl=0; lvl<PAGE_LEVELS; lvl++)
-		index[lvl] = vpn >> (lvl * PAGE_MAP_BITS);
-
-	/* do we have already a valid entry in the page tables */
-	for (lvl=PAGE_LEVELS-1; lvl>=0; lvl--) {
-		vpn = index[lvl];
-
-		if (!self[lvl][vpn])
-			return 0;
-	}
-
-	return 1;
-}
-
-int page_fault_handler(size_t viraddr, size_t pc)
+int page_fault_handler(size_t viraddr)
 {
 	task_t* task = per_core(current_task);
+
+	int check_pagetables(size_t vaddr)
+	{
+		int lvl;
+		ssize_t vpn = vaddr >> PAGE_BITS;
+		ssize_t index[PAGE_LEVELS];
+
+		/* Calculate index boundaries for page map traversal */
+		for (lvl=0; lvl<PAGE_LEVELS; lvl++)
+			index[lvl] = vpn >> (lvl * PAGE_MAP_BITS);
+
+		/* do we have already a valid entry in the page tables */
+		for (lvl=PAGE_LEVELS-1; lvl>=0; lvl--) {
+			vpn = index[lvl];
+
+			if (!self[lvl][vpn])
+				return 0;
+		}
+
+		return 1;
+	}
+
 	spinlock_irqsave_lock(&page_lock);
 
-	if ((task->heap) && (viraddr >= task->heap->start) && (viraddr < task->heap->end)) {
-		size_t flags;
-		int ret;
+	//page_dump();
 
+	if ((task->heap) && (viraddr >= task->heap->start) && (viraddr < task->heap->end)) {
 		/*
 		 * do we have a valid page table entry? => flush TLB and return
 		 */
@@ -244,8 +247,8 @@ int page_fault_handler(size_t viraddr, size_t pc)
 			goto default_handler;
 		}
 
-		flags = PG_USER|PG_RW;
-		ret = __page_map(viraddr, phyaddr, 1, flags);
+		size_t flags = PG_USER|PG_RW;
+		int ret = __page_map(viraddr, phyaddr, 1, flags);
 
 		if (BUILTIN_EXPECT(ret, 0)) {
 			LOG_ERROR("map_region: could not map %#lx to %#lx, task = %u\n", phyaddr, viraddr, task->id);
@@ -272,24 +275,98 @@ default_handler:
 // weak symbol is used to detect a Go application
 void __attribute__((weak)) runtime_osinit();
 
-/*static void dump_pgtable(void)
+typedef size_t page_entry_t;
+
+/** @brief Get the corresponding virtual address to a page map entry */
+static inline size_t entry_to_virt(page_entry_t* entry, int level)
 {
-	size_t* l0 = &l0_pgtable;
+	size_t addr = (size_t) entry;
 
-	LOG_INFO("Dump page table tree: %p\n", l0);
+	addr <<= (level+1) * PAGE_MAP_BITS;
+	addr &= 0x0000FFFFFFFFFFFFULL;
 
-	for (int i=0; i<512; i++) {
-		if (l0[i] != 0) {
-			LOG_INFO("\tx[%d] = %zx\n", i, l0[i]);
-			size_t* l1 = (size_t*) l0[i];
-			for(int j=0; j<512; j++) {
-				if (l1[j] != 0) {
-					LOG_INFO("\t\ty[%d] = %zx\n", j, l1[j]);
+	return addr;
+}
+
+/** @brief Get the base address of the child table
+ *
+ * @param entry The parent entry
+ * @return The child entry
+ */
+static inline page_entry_t* get_child_entry(page_entry_t *entry)
+{
+	size_t child = (size_t) entry;
+
+	child <<= PAGE_MAP_BITS;
+	child &= 0x0000FFFFFFFFFFFFULL;
+
+	return (page_entry_t*) child;
+}
+
+/** @brief Get the base address of the parent entry
+ *
+ * @param entry The child entry
+ * @return The parent entry
+ */
+static inline page_entry_t* get_parent_entry(page_entry_t *entry)
+{
+	ssize_t parent = (size_t) entry;
+
+	parent >>= PAGE_MAP_BITS;
+	parent |= 0x0000FF8000000000ULL; //PAGE_MAP_PGT;
+	parent &= ~(sizeof(size_t) - 1); // align to page_entry_t
+
+	return (page_entry_t*) parent;
+}
+
+void page_dump(void)
+{
+	size_t flags = 0;
+	size_t start = 0;
+	size_t end;
+
+	void print(size_t start, size_t end, size_t flags) {
+		size_t size = end - start;
+
+		kprintf("%#018lx-%#018lx %#14x 0x%zx\n", start, end, size, flags);
+	}
+
+	void traverse(int level, page_entry_t* entry) {
+		page_entry_t* stop = entry + PAGE_MAP_ENTRIES;
+		for (; entry != stop; entry++) {
+			if (*entry) {
+				if (level) { // do "pre-order" traversal
+					// TODO: handle "inheritance" of page table flags (see get_page_flags())
+					traverse(level-1, get_child_entry(entry));
+				} else {
+					if (!flags) {
+						flags = *entry & 0xFFFF000000000FFFULL;
+						start = entry_to_virt(entry, level);
+					}
+					else if (flags != (*entry & 0xFFFF000000000FFFULL)) {
+						end = entry_to_virt(entry, level);
+						print(start, end, flags);
+
+						flags = *entry & 0xFFFF000000000FFFULL;
+						start = end;
+					}
 				}
+			}
+			else if (flags) {
+				end = entry_to_virt(entry, level);
+				print(start, end, flags);
+				flags = 0;
 			}
 		}
 	}
-}*/
+
+	kprintf("%-18s-%18s %14s %-6s\n", "start", "end", "size", "flags"); // header
+
+	traverse(PAGE_LEVELS-1, (page_entry_t*) 0x0000FFFFFFFFF000ULL);
+
+	if (flags) // workaround to print last mapping
+		print(start, 0L, flags);
+}
 
 int page_init(void)
 {

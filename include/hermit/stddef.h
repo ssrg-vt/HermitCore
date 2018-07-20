@@ -57,7 +57,7 @@ extern size_t image_size;
 
 #define HEAP_START			(PAGE_2M_CEIL(STACK_SLOTS_START + STACK_SLOTS_NUM * DEFAULT_STACK_SIZE + PAGE_SIZE))
 
-#define HEAP_SIZE	(1ULL << 32)
+#define HEAP_SIZE	(1ULL << 37)
 #define KMSG_SIZE	0x8000
 #define INT_SYSCALL	0x80
 #define MAILBOX_SIZE	128
@@ -88,7 +88,6 @@ extern size_t image_size;
  * forwarding */
 #define UHYVE_PORT_CMDSIZE		0x740
 #define UHYVE_PORT_CMDVAL		0x780
-
 
 #define BUILTIN_EXPECT(exp, b)		__builtin_expect((exp), (b))
 //#define BUILTIN_EXPECT(exp, b)	(exp)

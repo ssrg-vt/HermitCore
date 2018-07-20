@@ -1,4 +1,4 @@
-set(PACKAGE_VERSION "0.2.6" CACHE STRING
+set(PACKAGE_VERSION "0.2.9" CACHE STRING
 	"HermitCore current version")
 
 set(MAX_CORES "16" CACHE STRING

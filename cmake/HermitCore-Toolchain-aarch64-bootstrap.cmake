@@ -5,5 +5,6 @@ set(CMAKE_C_COMPILER_WORKS 1 CACHE INTERNAL "")
 set(CMAKE_CXX_COMPILER_WORKS 1 CACHE INTERNAL "")
 
 # bootstrap toolchain cannot compile neither Go nor Fortran
-#unset(CMAKE_Go_COMPILER)
-#unset(CMAKE_Fortran_COMPILER)
+# FIXME pierre: both these lines were commented before
+unset(CMAKE_Go_COMPILER)
+unset(CMAKE_Fortran_COMPILER)

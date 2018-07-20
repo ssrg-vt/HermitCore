@@ -63,8 +63,8 @@ add_subdirectory(arch/aarch64)
 list(APPEND KERNEL_OBJECTS
 	$<TARGET_OBJECTS:${AARCH64_KERNEL_C_TARGET}>)
 else()
-# add arch/x86 and its objects
-add_subdirectory(arch/x86)
+# add arch/x86_64 and its objects
+add_subdirectory(arch/x86_64)
 list(APPEND KERNEL_OBJECTS
 	$<TARGET_OBJECTS:${X86_KERNEL_ASM_TARGET}>
 	$<TARGET_OBJECTS:${X86_KERNEL_C_TARGET}>)
@@ -127,6 +127,9 @@ install(DIRECTORY include/hermit
 	FILES_MATCHING
 		PATTERN *.h)
 
+install(FILES tools/init.sh
+        DESTINATION tools)
+
 # provide custom target to only install libhermit without its runtimes which is
 # needed during the compilation of the cross toolchain
 add_custom_target(hermit-bootstrap-install
@@ -150,11 +153,11 @@ add_custom_target(hermit
 # be relocated for installation
 
 ## HermitCore's own tools such as Qemu/KVM proxy
-build_external(tools ${HERMIT_ROOT}/tools "")
+build_external(caves ${HERMIT_ROOT}/caves "")
 
 if("${TARGET_ARCH}" STREQUAL "x86_64-hermit")
 
-#build_external(arch_x86_loader ${HERMIT_ROOT}/arch/x86/loader "")
+build_external(arch_x86_loader ${HERMIT_ROOT}/arch/x86_64/loader "")
 
 ## Intel's OpenMP runtime for x86 (libomp)
 build_external(libiomp ${HERMIT_ROOT}/usr/libomp ""
@@ -173,6 +176,9 @@ add_dependencies(hermit libiomp)
 ## XRay profiler
 #build_external(xray ${HERMIT_ROOT}/usr/xray "")
 #add_dependencies(hermit xray)
+
+## end of x86 specific part
+endif()
 
 ## end of x86 specific part
 endif()
@@ -224,7 +230,7 @@ set(CPACK_SYSTEM_NAME all)
 
 set(CPACK_PACKAGE_VERSION_MAJOR 0)
 set(CPACK_PACKAGE_VERSION_MINOR 2)
-set(CPACK_PACKAGE_VERSION_PATCH 6)
+set(CPACK_PACKAGE_VERSION_PATCH 9)
 
 set(CPACK_PACKAGE_CONTACT "Stefan Lankes <slankes@eonerc.rwth-aachen.de>")
 

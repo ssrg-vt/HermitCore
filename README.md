@@ -3,14 +3,14 @@
 
 # HermitCore - A lightweight unikernel for a scalable and predictable runtime behavior
 
-[![Build Status](https://travis-ci.org/RWTH-OS/HermitCore.svg?branch=master)](https://travis-ci.org/RWTH-OS/HermitCore)
+[![Build Status](https://travis-ci.org/hermitcore/libhermit.svg?branch=master)](https://travis-ci.org/hermitcore/libhermit)
 [![Slack Status](https://radiant-ridge-95061.herokuapp.com/badge.svg)](https://radiant-ridge-95061.herokuapp.com)
 
 The project [HermitCore]( http://www.hermitcore.org ) is a new
 [unikernel](http://unikernel.org) targeting a scalable and predictable runtime
 for high-performance and cloud computing. HermitCore extends the multi-kernel
 approach (like
-[McKernel](http://www-sys-aics.riken.jp/ResearchTopics/os/mckernel.html)) with
+[McKernel](https://www-sys-aics.riken.jp/ResearchTopics/os/mckernel/)) with
 unikernel features for a better programmability and scalability for hierarchical
 systems.
 
@@ -32,7 +32,7 @@ production ready. Please use it with caution.
 
 ## Contributing
 
-HermitCore is being developed on [GitHub](https://github.com/RWTH-OS/HermitCore).
+HermitCore is being developed on [GitHub](https://github.com/hermitcore/libhermit).
 Create your own fork, send us a pull request, and chat with us on [Slack](https://radiant-ridge-95061.herokuapp.com).
 
 ## Requirements
@@ -47,13 +47,13 @@ the HermitCore kernel and applications you need:
 
 ### HermitCore cross-toolchain
 
-We provide prebuilt packages (currently Debian-based only) of the HermitCore
+We provide prebuilt packages (currently Ubuntu 18.04 only) of the HermitCore
 toolchain, which can be installed as follows:
 
 ```bash
-$ echo "deb [trusted=yes] https://dl.bintray.com/rwth-os/hermitcore vivid main" | sudo tee -a /etc/apt/sources.list
+$ echo "deb [trusted=yes] https://dl.bintray.com/hermitcore/ubuntu bionic main" | sudo tee -a /etc/apt/sources.list
 $ sudo apt-get -qq update
-$ sudo apt-get install binutils-hermit newlib-hermit pthread-embedded-hermit gcc-hermit libhermit
+$ sudo apt-get install binutils-hermit newlib-hermit pte-hermit gcc-hermit libhermit
 ```
 
 For non-Debian based systems, a docker image with the complete toolchain is provided and can be installed as follows:
@@ -70,7 +70,7 @@ $ docker run -i -t -v ~/src:/src rwthos/hermitcore:latest
 
 Within the shell the cross-toolchain can be used to build HermitCore applications.
 
-If you want to build the toolchain yourself, have a look at the repository [hermit-toolchain](https://github.com/RWTH-OS/hermit-toolchain), which contains scripts to build the whole toolchain.
+If you want to build the toolchain yourself, have a look at the repository [hermit-toolchain](https://github.com/hermitcore/hermit-toolchain), which contains scripts to build the whole toolchain.
 
 Depending on how you want to use HermitCore, you might need additional packages
 such as:
@@ -84,7 +84,7 @@ such as:
 To build HermitCore from source (without compiler), the repository with its submodules has to be cloned.
 
 ```bash
-$ git clone git@github.com:RWTH-OS/HermitCore.git
+$ git clone git@github.com:hermitcore/libhermit.git
 $ cd HermitCore
 $ git submodule init
 $ git submodule update
