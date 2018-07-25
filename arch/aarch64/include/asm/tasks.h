@@ -43,6 +43,21 @@
 extern "C" {
 #endif
 
+/* We need this definitions in the migration code */
+typedef union dtv
+{
+	size_t counter;
+	struct {
+		void *val;
+		uint8_t is_static;
+	} pointer;
+} dtv_t;
+
+typedef struct {
+	dtv_t *dtv;	/* dtv */
+	void *privat;	/* private */
+} thread_block_t;
+
 /* we need this in the migration code */
 int init_tls(void);
 

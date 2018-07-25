@@ -46,20 +46,6 @@ extern const void tdata_end;
 extern atomic_int32_t cpu_online;
 extern atomic_int32_t current_boot_id;
 
-typedef union dtv
-{
-	size_t counter;
-	struct {
-		void *val;
-		uint8_t is_static;
-	} pointer;
-} dtv_t;
-
-typedef struct {
-	dtv_t *dtv;	/* dtv */
-	void *privat;	/* private */
-} thread_block_t;
-
 int init_tls(void)
 {
 	task_t* curr_task = per_core(current_task);

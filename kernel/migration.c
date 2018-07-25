@@ -150,12 +150,16 @@ int restore_tls(uint64_t tls_size, int mig_id) {
 			return -1;
 		}
 #ifdef __aarch64__
-		local_tls_start = get_tpidr();
+		thread_block_t *tcb = (thread_block_t *)get_tpidr();
+		local_tls_start = (uint64_t)tcb->dtv;
 #else
-		local_tls_start = get_tls();
+		local_tls_start = get_tls() - tls_size;
 #endif
 		ksprintf(tls_chkpt_file, "%s.%d", CHKPT_TLS_FILE, mig_id);
-		return migrate_restore_area(tls_chkpt_file, local_tls_start-tls_size,
+		MIGLOG("Restoring TLS - start: 0x%llx, size: 0x%llx from %s\n",
+				local_tls_start, tls_size, tls_chkpt_file);
+
+		return migrate_restore_area(tls_chkpt_file, local_tls_start,
 				tls_size);
 	}
 
@@ -182,14 +186,17 @@ int save_tls(uint64_t tls_size, int task_id) {
 		uint64_t local_tls_start;
 
 #ifdef __aarch64__
-		local_tls_start = get_tpidr();
+		thread_block_t *tcb = (thread_block_t *)get_tpidr();
+		local_tls_start = (uint64_t)tcb->dtv;
 #else
-		local_tls_start = get_tls();
+		local_tls_start = get_tls() - tls_size;
 #endif
 
 		ksprintf(tls_chkpt_file, "%s.%d", CHKPT_TLS_FILE, task_id);
-		return migrate_chkpt_area(local_tls_start-tls_size, tls_size,
-				tls_chkpt_file);
+		MIGLOG("Saving TLS - start: 0x%llx, size: 0x%llx in %s\n",
+				local_tls_start, tls_size, tls_chkpt_file);
+
+		return migrate_chkpt_area(local_tls_start, tls_size, tls_chkpt_file);
 	}
 
 	return 0;
