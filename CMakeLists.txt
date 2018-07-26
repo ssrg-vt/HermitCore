@@ -158,7 +158,8 @@ build_external(caves ${HERMIT_ROOT}/caves "")
 
 if("${TARGET_ARCH}" STREQUAL "x86_64-hermit")
 
-build_external(arch_x86_loader ${HERMIT_ROOT}/arch/x86_64/loader "")
+# Pierre: we dont need the loader
+# build_external(arch_x86_loader ${HERMIT_ROOT}/arch/x86_64/loader "")
 
 ## Intel's OpenMP runtime for x86 (libomp)
 build_external(libiomp ${HERMIT_ROOT}/usr/libomp ""
