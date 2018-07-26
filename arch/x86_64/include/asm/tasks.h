@@ -43,6 +43,9 @@
 extern "C" {
 #endif
 
+/* We need this for migration */
+int init_tls(void);
+
 /**
  * @brief Switch to current task
  *
@@ -61,6 +64,8 @@ void switch_context(size_t** stack);
  * - -EINVAL (-22) on failure
  */
 int create_default_frame(task_t* task, entry_point_t ep, void* arg, uint32_t core_id);
+int create_resume_frame(task_t* task, entry_point_t ep, void* arg,
+		uint32_t core_id, uint64_t stack_offset);
 
 /** @brief Jump to user code
  *

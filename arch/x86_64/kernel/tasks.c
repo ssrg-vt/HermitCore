@@ -39,6 +39,7 @@
 #include <asm/page.h>
 #include <asm/multiboot.h>
 #include <asm/irqflags.h>
+#include <hermit/migration-chkpt.h>
 
 #define TLS_OFFSET		8
 #define TLS_ALIGNBITS		5
@@ -57,7 +58,7 @@ extern const void percore_end0;
 
 extern uint64_t base;
 
-static int init_tls(void)
+int init_tls(void)
 {
 	task_t* curr_task = per_core(current_task);
 
@@ -192,6 +193,76 @@ int create_default_frame(task_t* task, entry_point_t ep, void* arg, uint32_t cor
 	/* The instruction pointer shall be set on the first function to be called
 	   after IRETing */
 	stptr->rip = (size_t)thread_entry;
+	stptr->rsi = (size_t)ep; // use second argument to transfer the entry point
+
+	stptr->cs = 0x08;
+	stptr->ss = 0x10;
+	stptr->gs = core_id * ((size_t) &percore_end0 - (size_t) &percore_start);
+	stptr->rflags = 0x1202;
+	stptr->userrsp = stptr->rsp;
+
+	/* Set the task's stack pointer entry to the stack we have crafted right now. */
+	task->last_stack_pointer = (size_t*)stack;
+
+	return 0;
+}
+
+/* Pierre: resuming from migration, the stack is correctly populated by this
+ * function, rather than creating a default frame through create_default_frame
+ * Here the important thing are:
+ * - ep: should be set to this specific address we resume after migration
+ *   (it's a label within sys_migrate)
+ * - stack_offset: were to reset the stack pointer (from the bottom of the
+ *   stack
+ */
+int create_resume_frame(task_t* task, entry_point_t ep, void* arg,
+		uint32_t core_id, uint64_t stack_offset)
+{
+	char stack_chkpt_file[32];
+	size_t *stack;
+	struct state *stptr;
+	size_t state_size;
+
+	if (BUILTIN_EXPECT(!task, 0))
+		return -EINVAL;
+
+	if (BUILTIN_EXPECT(!task->stack, 0))
+		return -EINVAL;
+
+	LOG_INFO("Task %d uses memory region [%p - %p] as stack\n", task->id, task->stack, (char*) task->stack + DEFAULT_STACK_SIZE - 1);
+	LOG_INFO("Task %d uses memory region [%p - %p] as IST1\n", task->id, task->ist_addr, (char*) task->ist_addr + KERNEL_STACK_SIZE - 1);
+
+	/* Restore the saved stack */
+	uint64_t stack_restore_base = (uint64_t)task->stack + DEFAULT_STACK_SIZE -
+		stack_offset;
+	ksprintf(stack_chkpt_file, "%s.%d", CHKPT_STACK_FILE, task->id);
+	if(migrate_restore_area(stack_chkpt_file, stack_restore_base,
+			stack_offset))
+		return -EINVAL;
+
+	/* The difference between setting up a task for SW-task-switching
+	 * and not for HW-task-switching is setting up a stack and not a TSS.
+	 * This is the stack which will be activated and popped off for iret later.
+	 */
+	stack = (size_t*) (task->stack + DEFAULT_STACK_SIZE - stack_offset);
+
+	/* Next bunch on the stack is the initial register state.
+	 * The stack must look like the stack of a task which was
+	 * scheduled away previously. */
+	state_size = sizeof(struct state);
+	stack = (size_t*) ((size_t) stack - state_size);
+
+	stptr = (struct state *) stack;
+	memset(stptr, 0x00, state_size);
+	stptr->rsp = (size_t)stack + state_size;
+	/* the first-function-to-be-called's arguments, ... */
+	stptr->rdi = (size_t) arg;
+	stptr->int_no = 0xB16B00B5;
+	stptr->error =  0xC03DB4B3;
+
+	/* The instruction pointer shall be set on the first function to be called
+	   after IRETing */
+	stptr->rip = (size_t)ep;
 	stptr->rsi = (size_t)ep; // use second argument to transfer the entry point
 
 	stptr->cs = 0x08;

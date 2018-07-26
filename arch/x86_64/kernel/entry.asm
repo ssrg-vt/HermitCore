@@ -76,6 +76,10 @@ align 4
     global hcgateway
     global hcmask
     global host_logical_addr
+    global should_migrate
+    global mig_resuming
+    global boot_gtod
+    global forwarded_tls_size
     base dq 0
     limit dq 0
     cpu_freq dd 0
@@ -107,6 +111,10 @@ align 4
     hcgateway db 10,0,5,1
     hcmask db 255,255,255,0
     host_logical_addr dq 0
+    should_migrate dd 0
+    mig_resuming dd 0
+    boot_gtod dq 0
+    forwarded_tls_size dq 0
 
 ; Bootstrap page tables are used during the initialization.
 align 4096

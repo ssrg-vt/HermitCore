@@ -82,6 +82,7 @@ DEFINE_PER_CORE(uint32_t, __core_id, 0);
 #endif
 
 #ifdef __x86_64__
+#ifdef DYNAMIC_TICKS
 static void update_timer(task_t* first)
 {
 	if (first) {
@@ -96,6 +97,7 @@ static void update_timer(task_t* first)
 		timer_disable();
 	}
 }
+#endif
 #endif
 
 
