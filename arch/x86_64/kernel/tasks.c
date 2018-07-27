@@ -57,18 +57,27 @@ extern const void percore_start;
 extern const void percore_end0;
 
 extern uint64_t base;
+extern uint64_t forwarded_tls_size;
 
+/* For some weird reason the tls_end marker in the linker script
+ * is not correct and we cannto compute the tls size: indeed,
+ * for some reason tbss is missing. This might be due to the fact that we now
+ * use gold as the linker, and it interprets the linker script (where tls_start
+ * and tls_end are defined) in a different manner than ld. The the solution is
+ * to have uhyve forward the correct tls size to the guest. Note that uhyve
+ * gets the tls size at load tiem when loading the tls segment (which size is
+ * correct */
 int init_tls(void)
 {
 	task_t* curr_task = per_core(current_task);
 
 	// do we have a thread local storage?
-	if (((size_t) &tls_end - (size_t) &tls_start) > 0) {
+	if(forwarded_tls_size) {
 		char* tls_addr = NULL;
 		size_t fs;
 
 		curr_task->tls_addr = (size_t) &tls_start;
-		curr_task->tls_size = (size_t) &tls_end - (size_t) &tls_start;
+		curr_task->tls_size = forwarded_tls_size;
 
 		tls_addr = kmalloc(curr_task->tls_size + TLS_ALIGNSIZE + sizeof(size_t));
 		if (BUILTIN_EXPECT(!tls_addr, 0)) {
