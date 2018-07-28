@@ -17,3 +17,5 @@ tags
 prefix
 cscope.out
 *.swp
+build-x86-64
+build-aarch64
