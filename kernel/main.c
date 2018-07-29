@@ -134,6 +134,9 @@ static int hermit_init(void)
 	memory_init();
 	signal_init();
 
+	LOG_INFO("BEFORE_ALIGN = %x\n", BEFORE_ALIGN);
+	LOG_INFO("HEAP_START = %x\n", HEAP_START);
+
 	return 0;
 }
 

@@ -128,7 +128,7 @@ install(DIRECTORY include/hermit
 		PATTERN *.h)
 
 install(FILES tools/init.sh
-        DESTINATION tools)
+        DESTINATION aarch64-hermit/tools)
 
 # provide custom target to only install libhermit without its runtimes which is
 # needed during the compilation of the cross toolchain

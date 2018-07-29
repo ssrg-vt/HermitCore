@@ -48,7 +48,12 @@ extern size_t image_size;
 #define TIMER_FREQ	100 /* in HZ */
 #define CLOCK_TICK_RATE	1193182 /* 8254 chip's internal oscillator frequency */
 #define CACHE_LINE	64
-#define HEAP_START	(PAGE_2M_CEIL(((size_t)&kernel_start + image_size + (16ULL << 10) + 0x800000)))
+
+#define PADDING 0x1600000
+#define ALIGN 0x1000000
+#define BEFORE_ALIGN    (PAGE_2M_CEIL(((size_t)&kernel_start + image_size + (16ULL << 10) + PADDING)))
+#define HEAP_START BEFORE_ALIGN%ALIGN == 0 ? BEFORE_ALIGN : (BEFORE_ALIGN + (ALIGN - BEFORE_ALIGN%ALIGN))
+
 #define HEAP_SIZE	(1ULL << 37)
 #define KMSG_SIZE	0x1000
 #define INT_SYSCALL	0x80
