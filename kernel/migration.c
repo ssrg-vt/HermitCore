@@ -89,9 +89,11 @@ void dec_running_threads(void) {
 }
 
 static int restore_data(uint64_t data_size) {
-return migrate_restore_area(CHKPT_DATA_FILE, (size_t)&__data_start,
+	MIGLOG("Restore data from 0x%llx, size 0x%llx\n", (size_t)&__data_start,
+			data_size);
+
+	return migrate_restore_area(CHKPT_DATA_FILE, (size_t)&__data_start,
 		data_size);
-	return 0;
 }
 
 static int restore_bss(uint64_t bss_size) {
