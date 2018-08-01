@@ -662,6 +662,9 @@ int hermit_main(void)
 	hermit_init();
 	system_calibration(); // enables also interrupts
 
+	MIGLOG("kernel_start @0x%llx\n", &kernel_start);
+	MIGLOG("HEAP_START @0x%llx\n", HEAP_START);
+
 	LOG_INFO("This is Hermit %s, build on %s\n", PACKAGE_VERSION, __DATE__);
 	//LOG_INFO("Isle %d of %d possible isles\n", isle, possible_isles);
 	LOG_INFO("Kernel starts at %p and ends at %p\n", &kernel_start, (size_t)&kernel_start + image_size);
