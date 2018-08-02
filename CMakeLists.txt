@@ -91,6 +91,7 @@ add_custom_command(
 		${CMAKE_OBJCOPY} --rename-section .bss=.kbss
 						 --rename-section .text=.ktext
 						 --rename-section .data=.kdata
+						 --rename-section .rodata=.krodata
 						 $<TARGET_FILE:hermit-bootstrap>
 
 	# copy libhermit.a into local prefix directory so that all subsequent
