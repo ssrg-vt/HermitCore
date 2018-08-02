@@ -73,8 +73,8 @@ void check_ticks(void)
 #else
 static void restart_periodic_timer(void)
 {
-	set_cntp_tval(freq_hz / TIMER_FREQ);
-	set_cntp_ctl(1);
+	set_cntv_tval(freq_hz / TIMER_FREQ);
+	set_cntv_ctl(1);
 }
 #endif
 
@@ -194,7 +194,7 @@ int timer_calibration(void)
 
 	LOG_INFO("aarch64_timer: frequency %d KHz\n", freq_hz / 1000);
 
-	irq_install_handler(INT_PPI_NSPHYS_TIMER, timer_handler);
+	irq_install_handler(INT_PPI_VIRT_TIMER, timer_handler);
 
 #ifndef DYNAMIC_TICKS
 	restart_periodic_timer();
