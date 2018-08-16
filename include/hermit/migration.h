@@ -56,6 +56,9 @@ __attribute__ ((no_instrument_function)) static inline int hermit_force_migratio
 /* Use this macro to force migration */
 #define HERMIT_FORCE_MIGRATION()	hermit_force_migration()
 
+/* Instrumentation functions are already defined in the popcorn migration
+ * library, disable them here for now */
+#if 0
 __attribute__((no_instrument_function)) static void __cyg_profile_func_enter (void *this_fn,
                                void *call_site) {
 	HERMIT_MIGPOINT();
@@ -65,6 +68,8 @@ __attribute__((no_instrument_function)) static void __cyg_profile_func_exit  (vo
                                void *call_site) {
 	HERMIT_MIGPOINT();
 }
+#endif
+
 #endif /* __KERNEL__ */
 
 #endif /* MIGRATION_H */
