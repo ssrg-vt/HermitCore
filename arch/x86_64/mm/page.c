@@ -251,20 +251,6 @@ void page_fault_handler(struct state *s)
 			//tlb_flush_one_page(viraddr, 0);
 			spinlock_irqsave_unlock(&page_lock);
 
-	                /* On-demand heap migration: populate the page */
-        	        if(task->migrated_heap &&
-                	                viraddr < (task->heap->start + task->migrated_heap->size)) {
-
-                        	/* Call uhyve to populate the page */
-                        	uhyve_pfault_t arg = {s->rip, viraddr, phyaddr, PFAULT_HEAP, 0};
-                        	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
-
-                      	  	if(!arg.success)
-                        	        goto default_handler;
-
-                        	spinlock_irqsave_unlock(&page_lock);
-                        	return;
-                	}
 
 			return;
 		}
@@ -291,6 +277,21 @@ void page_fault_handler(struct state *s)
 		}
 
 		spinlock_irqsave_unlock(&page_lock);
+
+                /* On-demand heap migration: populate the page */
+       	        if(task->migrated_heap &&
+               	                viraddr < (task->heap->start + task->migrated_heap->size)) {
+
+                       	/* Call uhyve to populate the page */
+                       	uhyve_pfault_t arg = {s->rip, viraddr, phyaddr, PFAULT_HEAP, 0};
+                       	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
+
+                    	if(!arg.success)
+                        	goto default_handler;
+
+                        spinlock_irqsave_unlock(&page_lock);
+                        return;
+                }
 
 		// clear cr2 to signalize that the pagefault is solved by the pagefault handler
 		write_cr2(0);
