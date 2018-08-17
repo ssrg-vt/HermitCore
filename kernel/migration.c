@@ -49,6 +49,9 @@ extern const void __bss_start;
 extern const void __data_start;
 extern const void __data_end;
 
+/* Main Core */
+extern uint32_t boot_processor;
+
 /* Keep track of the number of threads running. When a thread enters the
  * migration code, there is a barrier waiting for all running threads to reach
  * a migration point, i.e. to also enterr migration code. During that period
@@ -216,6 +219,19 @@ int save_tls(uint64_t tls_size, int task_id) {
 	return 0;
 }
 
+int periodic_page_access(void *arg)
+{
+	unsigned long long *i, j;
+	for(i = (unsigned long long*)HEAP_START; 
+			i < (unsigned long long*)HEAP_SIZE; i = i+PAGE_SIZE)
+	{
+		j = *i;
+		//sleep();
+	}
+	
+	return 0;
+}
+
 /* Returns -1 if migration attemp failed (on the source), 0 if we are back from
  * successful migration on the target, -2 if something went wrong during state
  * restoration on target
@@ -234,6 +250,7 @@ migrate_resume_entry_point:
 	if(mig_resuming) {
 		task_t *task = per_core(current_task);
 		static int primary_flag = 1;
+		unsigned int periodic_page_access_id;
 
 		MIGLOG("Thread %d (%s) enters resume code\n", task->id,
 				primary_flag ? "primary" : "secondary");
@@ -319,6 +336,9 @@ migrate_resume_entry_point:
 		SET_RBX(md.rbx[task->id]);
 		SET_RBP(md.rbp[task->id]);
 #endif
+
+		create_kernel_task_on_core((tid_t *)&periodic_page_access_id, 
+				periodic_page_access, NULL, NORMAL_PRIO, boot_processor);
 
 		return 0;
 	}
