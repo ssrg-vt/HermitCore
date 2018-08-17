@@ -1,7 +1,9 @@
 #ifndef MIGRATION_CHKPT_H
 #define MIGRATION_CHKPT_H
 
+#ifdef __KERNEL__
 #include <hermit/stddef.h>
+#endif
 
 #define CHKPT_MDATA_FILE	"mdata.bin"
 #define CHKPT_STACK_FILE	"stack.bin"
@@ -22,6 +24,7 @@ typedef struct {
 	uint64_t bss_size;		/* Size of bss area to restore */
 	uint64_t data_size;		/* Size of the data section to restore */
 	uint64_t heap_size;		/* Heap size */
+	uint64_t heap_start;    /* heap (virtual) start address */
 	uint64_t tls_size;		/* tls size */
 
 	/* Callee-saved register set: x86_64 */
@@ -48,11 +51,13 @@ typedef struct {
 
 } chkpt_metadata_t;
 
+#ifdef __KERNEL__
 int migrate_chkpt_area(uint64_t addr, uint64_t size, const char *filename);
 int migrate_restore_area(const char *filename, uint64_t addr, uint64_t size);
 int migrate_chkpt_area_not_contiguous(uint64_t addr, uint64_t size,
 		const char *filename, int mapped_on_demand);
 int migrate_restore_area_not_contiguous(const char *filename, uint64_t addr,
 		uint64_t size);
+#endif /* __KERNEL__ */
 
 #endif /* MIGRATION_CHKPT_H */
