@@ -80,6 +80,7 @@ align 4
     global mig_resuming
     global boot_gtod
     global forwarded_tls_size
+    global node_id
     base dq 0
     limit dq 0
     cpu_freq dd 0
@@ -115,6 +116,7 @@ align 4
     mig_resuming dd 0
     boot_gtod dq 0
     forwarded_tls_size dq 0
+    node_id dd 0
 
 ; Bootstrap page tables are used during the initialization.
 align 4096
