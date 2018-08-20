@@ -113,6 +113,9 @@ extern uint8_t hcip[4];
 extern uint8_t hcgateway[4];
 extern uint8_t hcmask[4];
 
+/* popcorn node id (coming from entry.s/asm */
+extern uint32_t node_id;
+
 extern void signal_init();
 extern void gettimeofday_init();
 
@@ -679,6 +682,8 @@ int hermit_main(void)
 	LOG_INFO("Current available memory: %zd MiB\n", atomic_int64_read(&total_available_pages) * PAGE_SIZE / (1024ULL*1024ULL));
 	LOG_INFO("Core %d is the boot processor\n", boot_processor);
 	LOG_INFO("System is able to use %d processors\n", possible_cpus);
+	LOG_INFO("Popcorn node id is: %u\n", node_id);
+
 	if (get_cmdline())
 		LOG_INFO("Kernel cmdline: %s\n", get_cmdline());
 	if (has_hbmem())

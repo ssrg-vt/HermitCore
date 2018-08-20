@@ -59,6 +59,9 @@ typedef struct sem sem_t;
 
 typedef void (*signal_handler_t)(int);
 
+struct node_info;
+struct popcorn_thread_status;
+
 /*
  * HermitCore is a libOS.
  * => classical system calls are realized as normal function
@@ -66,6 +69,9 @@ typedef void (*signal_handler_t)(int);
  */
 void* sys_stackaddr(void);
 size_t sys_stacksize(void);
+int sys_get_node_info(int *origin_nid, struct node_info* ni);
+int sys_get_thread_status(struct popcorn_thread_status *status);
+
 tid_t sys_getpid(void);
 int sys_fork(void);
 int sys_wait(int* status);

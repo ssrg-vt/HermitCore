@@ -133,11 +133,9 @@ int create_resume_frame(task_t* task, entry_point_t ep, void* arg, uint32_t
 			task->ist_addr, (char*) task->ist_addr + KERNEL_STACK_SIZE - 1);
 
 	/* Restore the saved stack */
-	uint64_t stack_restore_base = (uint64_t)task->stack + DEFAULT_STACK_SIZE -
-		stack_offset;
 	ksprintf(stack_chkpt_file, "%s.%d", CHKPT_STACK_FILE, task->id);
-	if(migrate_restore_area(stack_chkpt_file, stack_restore_base,
-			stack_offset))
+	if(migrate_restore_area(stack_chkpt_file, (uint64_t)task->stack,
+			DEFAULT_STACK_SIZE))
 		return -EINVAL;
 
 	/* The difference between setting up a task for SW-task-switching
