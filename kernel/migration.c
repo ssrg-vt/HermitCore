@@ -178,21 +178,22 @@ int restore_tls(uint64_t tls_size, int mig_id) {
 	return 0;
 }
 
-int save_stack(uint64_t rsp) {
+int save_stack(uint64_t stack_pointer) {
 	char stack_chkpt_file[32];
 	task_t *task = per_core(current_task);
 	uint64_t stack_base = (uint64_t)task->stack;
-	uint64_t used_stack_portion = stack_base + DEFAULT_STACK_SIZE - rsp;
+	uint64_t used_stack_portion = stack_base + DEFAULT_STACK_SIZE -
+		stack_pointer;
 
 	md.stack_offset[task->id] = used_stack_portion;
 	md.stack_base[task->id] = stack_base;
 
 	ksprintf(stack_chkpt_file, "%s.%d", CHKPT_STACK_FILE, task->id);
 
-	MIGLOG("Checkpoint stack from 0x%llx, size 0x%llx\n", rsp,
-			used_stack_portion);
+	MIGLOG("Checkpoint stack from 0x%llx, size 0x%llx, SP=0x%llx\n", stack_base,
+			DEFAULT_STACK_SIZE, stack_pointer);
 
-	return migrate_chkpt_area(rsp, used_stack_portion, stack_chkpt_file);
+	return migrate_chkpt_area(stack_base, DEFAULT_STACK_SIZE, stack_chkpt_file);
 }
 
 int save_tls(uint64_t tls_size, int task_id) {
@@ -227,8 +228,8 @@ int sys_migrate(void) {
 	 * number of instructions can vary so we cannot simply rely on the function
 	 * address to set the resuming IP). Thus we use the label below (migrate:)
 	 * which address is completely consistent with the stack pointer we get in
-	 * the rsp variable. */
-	register uint64_t rsp = current_stack_pointer;
+	 * the stack pointer variable. */
+	register uint64_t stack_pointer = current_stack_pointer;
 
 migrate_resume_entry_point:
 
@@ -330,7 +331,7 @@ migrate_resume_entry_point:
 			is_main_task ? "primary" : "secondary" );
 
 	/* Stack and TLS are saved on a per-thread basis */
-	if(save_stack(rsp))
+	if(save_stack(stack_pointer))
 		return -1;
 
 	/* Save TLS */
