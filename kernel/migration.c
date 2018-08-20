@@ -97,6 +97,9 @@ static int restore_data(uint64_t data_size) {
 }
 
 static int restore_bss(uint64_t bss_size) {
+	MIGLOG("Restore bss from 0x%llx, size 0x%llx\n", (size_t)&__bss_start,
+			bss_size);
+
 	return migrate_restore_area(CHKPT_BSS_FILE, (size_t)&__bss_start, bss_size);
 }
 
@@ -131,6 +134,9 @@ static int restore_heap(uint64_t heap_size) {
 	for(i=curr_task->heap->start; i<curr_task->heap->end; i+= PAGE_SIZE)
 		memset((void *)i, 0x0, 0x1);
 
+	MIGLOG("Restore heap from 0x%llx, size 0x%llx\n", curr_task->heap->start,
+			heap_size);
+
 	return migrate_restore_area_not_contiguous(CHKPT_HEAP_FILE,
 			curr_task->heap->start, heap_size);
 }
@@ -138,6 +144,10 @@ static int restore_heap(uint64_t heap_size) {
 int checkpoint_heap(void) {
 
 	task_t* task = per_core(current_task);
+
+	MIGLOG("Checkpoint heap from 0x%llx, size 0x%llx\n", task->heap->start,
+			task->heap->end - task->heap->start);
+
 	return migrate_chkpt_area_not_contiguous(task->heap->start,
 			task->heap->end - task->heap->start, CHKPT_HEAP_FILE, 1);
 }
@@ -178,6 +188,9 @@ int save_stack(uint64_t rsp) {
 	md.stack_base[task->id] = stack_base;
 
 	ksprintf(stack_chkpt_file, "%s.%d", CHKPT_STACK_FILE, task->id);
+
+	MIGLOG("Checkpoint stack from 0x%llx, size 0x%llx\n", rsp,
+			used_stack_portion);
 
 	return migrate_chkpt_area(rsp, used_stack_portion, stack_chkpt_file);
 }
@@ -345,12 +358,15 @@ migrate_resume_entry_point:
 
 	/* Save .bss */
 	bss_size = (size_t) &kernel_start + image_size - (size_t) &__bss_start;
+	MIGLOG("Checkpoint bss from 0x%llx, size 0x%llx\n", &__bss_start, bss_size);
 	if(migrate_chkpt_area(((uint64_t)&__bss_start), bss_size, CHKPT_BSS_FILE))
 		return -1;
 	md.bss_size = bss_size;
 
 	/* Save .data */
 	data_size = (size_t) &__data_end - (size_t) &__data_start;
+	MIGLOG("Checkpoint data from 0x%llx, size 0x%llx\n", &__data_start,
+			data_size);
 	if(migrate_chkpt_area(((uint64_t)&__data_start), data_size,
 				CHKPT_DATA_FILE))
 		return -1;
