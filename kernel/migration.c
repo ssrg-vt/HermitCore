@@ -222,7 +222,7 @@ int save_tls(uint64_t tls_size, int task_id) {
  * successful migration on the target, -2 if something went wrong during state
  * restoration on target
  */
-int sys_migrate(void) {
+int sys_migrate(void *regset) {
 	/* This is the stack pointer value not exactly at the beginning of this
 	 * function, but right after the preamble inserted by the compiler (which
 	 * number of instructions can vary so we cannot simply rely on the function
@@ -411,6 +411,22 @@ migrate_resume_entry_point:
 	GET_RBP(md.rbp[task->id]);
 #endif
 
+	/* Checkpoint popcorn registers TODO fix this!! for now just homogeneous */
+#ifdef __aarch64__
+	if(regset)
+		memcpy(&(md.popcorn_arm_regs), regset, sizeof(struct regset_aarch64));
+	else
+		memset(&(md.popcorn_arm_regs), 0x0, sizeof(struct regset_aarch64));
+#else
+	if(regset) {
+		struct regset_x86_64 *rsptr = (struct regset_x86_64 *)regset;
+		memcpy(&(md.popcorn_x86_regs), regset, sizeof(struct regset_x86_64));
+		MIGLOG("POPCORN SP: 0x%llx\n", rsptr->rip);
+	}
+	else
+		memset(&(md.popcorn_x86_regs), 0x0, sizeof(struct regset_x86_64));
+#endif
+
 	/* Wait for secondary threads to finish their part of the migration */
 	sec_threads_barrier = atomic_int32_read(&sec_threads_ready);
 	while(sec_threads_barrier != 1) {
@@ -461,7 +477,7 @@ void migrate_init(void) {
  * -1 if issue saving state (on source machine)
  * -2 if issue restoring state (on target machine)
  */
-int migrate_if_needed(void) {
+int migrate_if_needed(void *regset) {
 
 	if(atomic_int32_read(&should_migrate) == 1) {
 		/* Wait for every thread to be in a migratable state TODO use sem? */
@@ -474,7 +490,7 @@ int migrate_if_needed(void) {
 
 		/* reset migration flag */
 		atomic_int32_set(&should_migrate, 0);
-		return sys_migrate();
+		return sys_migrate(regset);
 	}
 
 	return 1;

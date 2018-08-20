@@ -11,6 +11,60 @@
 #define CHKPT_TLS_FILE		"tls.bin"
 #define CHKPT_FDS_FILE		"fds.bin"
 
+/* WARNING: this should be consistent with stack transformation definition
+ * Defines an abstract register set for the x86-64 ISA, used for finding data
+ * and virtually unwinding the stack.  Laid out to be compatible with kernel's
+ * struct pt_regs for x86-64.
+ */
+struct regset_x86_64
+{
+  /* Program counter/instruction pointer */
+  void* rip;
+
+  /* General purpose registers */
+  uint64_t rax, rdx, rcx, rbx,
+           rsi, rdi, rbp, rsp,
+           r8, r9, r10, r11,
+           r12, r13, r14, r15;
+
+  /* Multimedia-extension (MMX) registers */
+  uint64_t mmx[8];
+
+  /* Streaming SIMD Extension (SSE) registers */
+  unsigned __int128 xmm[16];
+
+  /* x87 floating point registers */
+  long double st[8];
+
+  /* Segment registers */
+  uint32_t cs, ss, ds, es, fs, gs;
+
+  /* Flag register */
+  uint64_t rflags;
+
+  // TODO control registers
+};
+
+/* WARNING: Should be consistent with stack_transformation definition
+ * Defines an abstract register set for the aarch64 ISA, used for finding data
+ * and virtually unwinding the stack.  Laid out to be compatible with kernel's
+ * struct pt_regs for arm64.
+ */
+struct regset_aarch64
+{
+  /* Stack pointer & program counter */
+  void* sp;
+  void* pc;
+
+  /* General purpose registers */
+  uint64_t x[31];
+
+  /* FPU/SIMD registers */
+  unsigned __int128 v[32];
+
+  // TODO ELR_mode register
+};
+
 typedef struct {
 	/* Offset from the base of the stack to rsp: */
 	uint64_t stack_offset[MAX_TASKS];
@@ -45,6 +99,10 @@ typedef struct {
 	uint64_t x28[MAX_TASKS];
 	uint64_t x29[MAX_TASKS];
 	uint64_t x30[MAX_TASKS];
+
+	/* popcorn regsets TODO replace what is above */
+	struct regset_aarch64 popcorn_arm_regs;
+	struct regset_x86_64 popcorn_x86_regs;
 
 } chkpt_metadata_t;
 
