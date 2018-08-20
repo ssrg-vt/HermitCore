@@ -89,12 +89,17 @@ void dec_running_threads(void) {
 }
 
 static int restore_data(uint64_t data_size) {
-return migrate_restore_area(CHKPT_DATA_FILE, (size_t)&__data_start,
+	MIGLOG("Restore data from 0x%llx, size 0x%llx\n", (size_t)&__data_start,
+			data_size);
+
+	return migrate_restore_area(CHKPT_DATA_FILE, (size_t)&__data_start,
 		data_size);
-	return 0;
 }
 
 static int restore_bss(uint64_t bss_size) {
+	MIGLOG("Restore bss from 0x%llx, size 0x%llx\n", (size_t)&__bss_start,
+			bss_size);
+
 	return migrate_restore_area(CHKPT_BSS_FILE, (size_t)&__bss_start, bss_size);
 }
 
@@ -129,6 +134,9 @@ static int restore_heap(uint64_t heap_size) {
 	for(i=curr_task->heap->start; i<curr_task->heap->end; i+= PAGE_SIZE)
 		memset((void *)i, 0x0, 0x1);
 
+	MIGLOG("Restore heap from 0x%llx, size 0x%llx\n", curr_task->heap->start,
+			heap_size);
+
 	return migrate_restore_area_not_contiguous(CHKPT_HEAP_FILE,
 			curr_task->heap->start, heap_size);
 }
@@ -136,6 +144,10 @@ static int restore_heap(uint64_t heap_size) {
 int checkpoint_heap(void) {
 
 	task_t* task = per_core(current_task);
+
+	MIGLOG("Checkpoint heap from 0x%llx, size 0x%llx\n", task->heap->start,
+			task->heap->end - task->heap->start);
+
 	return migrate_chkpt_area_not_contiguous(task->heap->start,
 			task->heap->end - task->heap->start, CHKPT_HEAP_FILE, 1);
 }
@@ -166,18 +178,22 @@ int restore_tls(uint64_t tls_size, int mig_id) {
 	return 0;
 }
 
-int save_stack(uint64_t rsp) {
+int save_stack(uint64_t stack_pointer) {
 	char stack_chkpt_file[32];
 	task_t *task = per_core(current_task);
 	uint64_t stack_base = (uint64_t)task->stack;
-	uint64_t used_stack_portion = stack_base + DEFAULT_STACK_SIZE - rsp;
+	uint64_t used_stack_portion = stack_base + DEFAULT_STACK_SIZE -
+		stack_pointer;
 
 	md.stack_offset[task->id] = used_stack_portion;
 	md.stack_base[task->id] = stack_base;
 
 	ksprintf(stack_chkpt_file, "%s.%d", CHKPT_STACK_FILE, task->id);
 
-	return migrate_chkpt_area(rsp, used_stack_portion, stack_chkpt_file);
+	MIGLOG("Checkpoint stack from 0x%llx, size 0x%llx, SP=0x%llx\n", stack_base,
+			DEFAULT_STACK_SIZE, stack_pointer);
+
+	return migrate_chkpt_area(stack_base, DEFAULT_STACK_SIZE, stack_chkpt_file);
 }
 
 int save_tls(uint64_t tls_size, int task_id) {
@@ -212,8 +228,8 @@ int sys_migrate(void) {
 	 * number of instructions can vary so we cannot simply rely on the function
 	 * address to set the resuming IP). Thus we use the label below (migrate:)
 	 * which address is completely consistent with the stack pointer we get in
-	 * the rsp variable. */
-	register uint64_t rsp = current_stack_pointer;
+	 * the stack pointer variable. */
+	register uint64_t stack_pointer = current_stack_pointer;
 
 migrate_resume_entry_point:
 
@@ -315,7 +331,7 @@ migrate_resume_entry_point:
 			is_main_task ? "primary" : "secondary" );
 
 	/* Stack and TLS are saved on a per-thread basis */
-	if(save_stack(rsp))
+	if(save_stack(stack_pointer))
 		return -1;
 
 	/* Save TLS */
@@ -343,12 +359,15 @@ migrate_resume_entry_point:
 
 	/* Save .bss */
 	bss_size = (size_t) &kernel_start + image_size - (size_t) &__bss_start;
+	MIGLOG("Checkpoint bss from 0x%llx, size 0x%llx\n", &__bss_start, bss_size);
 	if(migrate_chkpt_area(((uint64_t)&__bss_start), bss_size, CHKPT_BSS_FILE))
 		return -1;
 	md.bss_size = bss_size;
 
 	/* Save .data */
 	data_size = (size_t) &__data_end - (size_t) &__data_start;
+	MIGLOG("Checkpoint data from 0x%llx, size 0x%llx\n", &__data_start,
+			data_size);
 	if(migrate_chkpt_area(((uint64_t)&__data_start), data_size,
 				CHKPT_DATA_FILE))
 		return -1;

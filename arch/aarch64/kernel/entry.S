@@ -135,6 +135,8 @@ boot_gtod: .quad 0
 forwarded_tls_size: .quad 0
 .global uart_mmio
 uart_mmio: .xword 0
+.global node_id
+node_id: .xword 0
 
 start64:
   //mrs x0, s3_1_c15_c3_0 // Read EL1 Configuration Base Address Register
