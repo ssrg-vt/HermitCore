@@ -487,8 +487,10 @@ migrate_resume_entry_point:
 		MIGLOG("Writing popcorn register set in metadata\n");
 #ifdef __aarch64__
 		memcpy(&(md.popcorn_arm_regs), regset, sizeof(struct regset_aarch64));
+		memcpy(&(md.popcorn_x86_regs), regset, sizeof(struct regset_x86_64));
 #else
 		memcpy(&(md.popcorn_x86_regs), regset, sizeof(struct regset_x86_64));
+		memcpy(&(md.popcorn_arm_regs), regset, sizeof(struct regset_aarch64));
 #endif
 		md.popcorn_regs_valid = 1;
 	}
