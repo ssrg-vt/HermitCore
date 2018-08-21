@@ -2,6 +2,8 @@
 #define MIGRATION_CHKPT_H
 
 #include <hermit/stddef.h>
+#include <hermit/migration-x86-regs.h>
+#include <hermit/migration-aarch64-regs.h>
 
 #define CHKPT_MDATA_FILE	"mdata.bin"
 #define CHKPT_STACK_FILE	"stack.bin"
@@ -10,60 +12,6 @@
 #define CHKPT_HEAP_FILE		"heap.bin"
 #define CHKPT_TLS_FILE		"tls.bin"
 #define CHKPT_FDS_FILE		"fds.bin"
-
-/* WARNING: this should be consistent with stack transformation definition
- * Defines an abstract register set for the x86-64 ISA, used for finding data
- * and virtually unwinding the stack.  Laid out to be compatible with kernel's
- * struct pt_regs for x86-64.
- */
-struct regset_x86_64
-{
-  /* Program counter/instruction pointer */
-  void* rip;
-
-  /* General purpose registers */
-  uint64_t rax, rdx, rcx, rbx,
-           rsi, rdi, rbp, rsp,
-           r8, r9, r10, r11,
-           r12, r13, r14, r15;
-
-  /* Multimedia-extension (MMX) registers */
-  uint64_t mmx[8];
-
-  /* Streaming SIMD Extension (SSE) registers */
-  unsigned __int128 xmm[16];
-
-  /* x87 floating point registers */
-  long double st[8];
-
-  /* Segment registers */
-  uint32_t cs, ss, ds, es, fs, gs;
-
-  /* Flag register */
-  uint64_t rflags;
-
-  // TODO control registers
-};
-
-/* WARNING: Should be consistent with stack_transformation definition
- * Defines an abstract register set for the aarch64 ISA, used for finding data
- * and virtually unwinding the stack.  Laid out to be compatible with kernel's
- * struct pt_regs for arm64.
- */
-struct regset_aarch64
-{
-  /* Stack pointer & program counter */
-  void* sp;
-  void* pc;
-
-  /* General purpose registers */
-  uint64_t x[31];
-
-  /* FPU/SIMD registers */
-  unsigned __int128 v[32];
-
-  // TODO ELR_mode register
-};
 
 typedef struct {
 	/* Offset from the base of the stack to rsp: */
