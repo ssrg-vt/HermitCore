@@ -673,10 +673,17 @@ int create_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio, uint32_t c
 				}
 
 				/* Primary thread */
-				ret = create_resume_frame(task_table+i, (void *)resume_md.ip,
+				if(!resume_md.popcorn_regs_valid) {
+					/* Old homogeneous migration scheme, FIXME remove that at
+					 * some point */
+					ret = create_resume_frame(task_table+i,
+						(void *)resume_md.ip,i arg, core_id,
+						resume_md.stack_offset[(int)resume_md.task_ids[0]]);
+				} else {
+					ret = create_resume_frame(task_table+i, (void *)sys_migrate,
 						arg, core_id,
 						resume_md.stack_offset[(int)resume_md.task_ids[0]]);
-
+				}
 			}
 			else
 				ret = create_default_frame(task_table+i, ep, arg, core_id);
