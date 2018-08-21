@@ -44,4 +44,16 @@
 #define SET_R14( var ) SET_REG64( var, "r14" )
 #define SET_R15( var ) SET_REG64( var, "r15" )
 
+/*
+ * The instruction pointer is a little weird because you can't read it
+ * directly.  The assembler replaces "$." with the address of the instruction.
+ */
+#define GET_RIP( var ) asm volatile("movq $., %0" : "=g" (var) )
+
+/*
+ * The only way to set the IP is through control flow operations.
+ */
+#define SET_RIP_REG( var ) asm volatile("jmpq *%0" : : "r" (var) )
+#define SET_RIP_IMM( var ) asm volatile("movq %0, -0x8(%%rsp); jmpq *-0x8(%%rsp)" : : "i" (var) )
+
 #endif /* MIGRATION_X86_REG_H */

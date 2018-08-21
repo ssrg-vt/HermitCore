@@ -101,6 +101,7 @@ typedef struct {
 	uint64_t x30[MAX_TASKS];
 
 	/* popcorn regsets TODO replace what is above */
+	uint8_t popcorn_regs_valid;
 	struct regset_aarch64 popcorn_arm_regs;
 	struct regset_x86_64 popcorn_x86_regs;
 

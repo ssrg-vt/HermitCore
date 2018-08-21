@@ -74,4 +74,18 @@
 #define SET_X29( var ) SET_REG64( var, "x29" )
 #define SET_X30( var ) SET_REG64( var, "x30" )
 
+/*
+ * The only way to set the PC is through control flow operations.
+ */
+#define SET_PC_IMM( val ) asm volatile("b %0" : : "i" (val) )
+#define SET_PC_REG( val ) asm volatile("br %0" : : "r" (val) )
+
+/*
+ * The stack pointer is a little weird because you can't read it directly into/
+ * write it directly from memory.  Move it into another register which can be
+ * saved in memory.
+ */
+#define GET_SP( var ) asm volatile("mov x15, sp; str x15, %0" : "=m" (var) : : "x15")
+#define SET_SP( var ) asm volatile("ldr x15, %0; mov sp, x15" : : "m" (var) : "x15")
+
 #endif /* MIGRATION_AARCH64_REGS_H */

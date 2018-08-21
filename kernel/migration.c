@@ -313,6 +313,30 @@ migrate_resume_entry_point:
 		SET_X28(md.x28[task->id]);
 		SET_X29(md.x29[task->id]);
 		SET_X30(md.x30[task->id]);
+
+		if(md.popcorn_regs_valid) {
+			/* TODO here restore the entire set of registers */
+			MIGLOG("Detected popcorn register set\n");
+			struct regset_aarch64 *rs =
+				(struct regset_aarch64 *)&(md.popcorn_arm_regs);
+			SET_X19(rs->x[19]);
+			SET_X20(rs->x[20]);
+			SET_X21(rs->x[21]);
+			SET_X22(rs->x[22]);
+			SET_X23(rs->x[23]);
+			SET_X24(rs->x[24]);
+			SET_X25(rs->x[25]);
+			SET_X26(rs->x[26]);
+			SET_X27(rs->x[27]);
+			SET_X28(rs->x[28]);
+			SET_X29(rs->x[29]);
+			SET_X30(rs->x[30]);
+			SET_SP(rs->sp);
+			SET_PC_REG(rs->pc);
+
+			MIGERR("Should not reach here!\n");
+		}
+
 #else
 		SET_R12(md.r12[task->id]);
 		SET_R13(md.r13[task->id]);
@@ -320,6 +344,19 @@ migrate_resume_entry_point:
 		SET_R15(md.r15[task->id]);
 		SET_RBX(md.rbx[task->id]);
 		SET_RBP(md.rbp[task->id]);
+
+		if(md.popcorn_regs_valid) {
+			/* TODO here restore the entire set of registers */
+			MIGLOG("Detected popcorn register set\n");
+			struct regset_x86_64 *rs =
+				(struct regset_x86_64 *)&(md.popcorn_x86_regs);
+			SET_RSP(rs->rsp);
+			SET_RBP(rs->rbp);
+			SET_RIP_REG(rs->rip);
+
+			MIGERR("Should not reach here!\n");
+		}
+
 #endif
 
 		return 0;
@@ -412,20 +449,19 @@ migrate_resume_entry_point:
 #endif
 
 	/* Checkpoint popcorn registers TODO fix this!! for now just homogeneous */
-#ifdef __aarch64__
-	if(regset)
-		memcpy(&(md.popcorn_arm_regs), regset, sizeof(struct regset_aarch64));
-	else
-		memset(&(md.popcorn_arm_regs), 0x0, sizeof(struct regset_aarch64));
-#else
 	if(regset) {
-		struct regset_x86_64 *rsptr = (struct regset_x86_64 *)regset;
+		MIGLOG("Writing popcorn register set in metadata\n");
+#ifdef __aarch64__
+		memcpy(&(md.popcorn_arm_regs), regset, sizeof(struct regset_aarch64));
+#else
 		memcpy(&(md.popcorn_x86_regs), regset, sizeof(struct regset_x86_64));
-		MIGLOG("POPCORN SP: 0x%llx\n", rsptr->rip);
-	}
-	else
-		memset(&(md.popcorn_x86_regs), 0x0, sizeof(struct regset_x86_64));
 #endif
+		md.popcorn_regs_valid = 1;
+	}
+	else {
+		MIGLOG("WARNING: no popcorn register set passed\n");
+		md.popcorn_regs_valid = 0;
+	}
 
 	/* Wait for secondary threads to finish their part of the migration */
 	sec_threads_barrier = atomic_int32_read(&sec_threads_ready);
