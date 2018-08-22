@@ -37,6 +37,12 @@
 })
 #endif
 
+typedef struct {
+	uint64_t heap_size;
+        uint64_t bss_size;
+} __attribute__ ((packed)) uhyve_migration_t;
+
+
 /* atomic variable set to 1 when application should migrate */
 extern atomic_int32_t should_migrate;
 
@@ -450,7 +456,8 @@ migrate_resume_entry_point:
 
 	/* Finally the main task sends the migration signal to uhyve */
 	MIGLOG("Thread %d (primary) done with migration\n", task->id);
-	uhyve_send(UHYVE_PORT_MIGRATE, 0);
+	uhyve_migration_t arg = {md.heap_size, md.bss_size};
+	uhyve_send(UHYVE_PORT_MIGRATE, (unsigned)virt_to_phys((size_t)&arg));
 
 	/* Should never reach here */
 	MIGERR("Migration - source: should not reach that point\n");
