@@ -2,7 +2,7 @@
 #define MIGRATION_H
 
 /* Functions needed in both kernel and userspace */
-int migrate_if_needed(void);
+int migrate_if_needed(void *regset);
 void force_migration_flag(int val);
 
 #ifdef __KERNEL__
@@ -11,7 +11,7 @@ void force_migration_flag(int val);
 
 /* Kernel migration interface */
 void migrate_init(void);
-int sys_migrate(void);
+int sys_migrate(void *regset);
 void incr_running_threads(void);
 void dec_running_threads(void);
 void set_primary_thread_id(int id);
@@ -34,8 +34,8 @@ void init_threads_to_resume(int num_threads);
 #include <stdio.h>
 #include <stdlib.h>
 
-__attribute__ ((no_instrument_function)) static inline int hermit_migpoint(void) {
-	int r = migrate_if_needed();
+__attribute__ ((no_instrument_function)) static inline int hermit_migpoint(void *regset) {
+	int r = migrate_if_needed(regset);
 	if(r < 0) {
 		if(r == -1)
 			fprintf(stderr, "Error saving state during migration\n");
@@ -46,15 +46,15 @@ __attribute__ ((no_instrument_function)) static inline int hermit_migpoint(void)
 	return r;
 }
 
-__attribute__ ((no_instrument_function)) static inline int hermit_force_migration(void) {
+__attribute__ ((no_instrument_function)) static inline int hermit_force_migration(void *regset) {
 	force_migration_flag(1);
-	return hermit_migpoint();
+	return hermit_migpoint(regset);
 }
 
 /* Use this macro for easy migration point insertion in the code */
-#define HERMIT_MIGPOINT() 			hermit_migpoint()
+#define HERMIT_MIGPOINT(regset) 			hermit_migpoint(regset)
 /* Use this macro to force migration */
-#define HERMIT_FORCE_MIGRATION()	hermit_force_migration()
+#define HERMIT_FORCE_MIGRATION(regset)	hermit_force_migration(regset)
 
 /* Instrumentation functions are already defined in the popcorn migration
  * library, disable them here for now */

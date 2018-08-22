@@ -2,6 +2,8 @@
 #define MIGRATION_CHKPT_H
 
 #include <hermit/stddef.h>
+#include <hermit/migration-x86-regs.h>
+#include <hermit/migration-aarch64-regs.h>
 
 #define CHKPT_MDATA_FILE	"mdata.bin"
 #define CHKPT_STACK_FILE	"stack.bin"
@@ -45,6 +47,11 @@ typedef struct {
 	uint64_t x28[MAX_TASKS];
 	uint64_t x29[MAX_TASKS];
 	uint64_t x30[MAX_TASKS];
+
+	/* popcorn regsets TODO replace what is above */
+	uint8_t popcorn_regs_valid;
+	struct regset_aarch64 popcorn_arm_regs;
+	struct regset_x86_64 popcorn_x86_regs;
 
 } chkpt_metadata_t;
 

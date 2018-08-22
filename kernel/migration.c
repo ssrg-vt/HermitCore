@@ -222,7 +222,7 @@ int save_tls(uint64_t tls_size, int task_id) {
  * successful migration on the target, -2 if something went wrong during state
  * restoration on target
  */
-int sys_migrate(void) {
+int sys_migrate(void *regset) {
 	/* This is the stack pointer value not exactly at the beginning of this
 	 * function, but right after the preamble inserted by the compiler (which
 	 * number of instructions can vary so we cannot simply rely on the function
@@ -277,7 +277,6 @@ migrate_resume_entry_point:
 						id, md.task_ids[i]);
 				i++;
 			}
-
 		}
 
 		if(restore_tls(md.tls_size, task->id)) {
@@ -298,7 +297,7 @@ migrate_resume_entry_point:
 		if(task->id == primary_thread_id)
 			mig_resuming = 0;
 
-		/* Restore callee-saved registers */
+		/* Restore callee-saved registers or the full set of popcorn regs */
 #ifdef __aarch64__
 		// x19 -> x28 + frame pointer (x29) + link register (ret. addr, x30)
 		SET_X19(md.x19[task->id]);
@@ -313,6 +312,51 @@ migrate_resume_entry_point:
 		SET_X28(md.x28[task->id]);
 		SET_X29(md.x29[task->id]);
 		SET_X30(md.x30[task->id]);
+
+		if(md.popcorn_regs_valid) {
+			MIGLOG("Detected popcorn register set\n");
+			struct regset_aarch64 *rs =
+				(struct regset_aarch64 *)&(md.popcorn_arm_regs);
+
+			SET_X0(rs->x[0]);
+			SET_X1(rs->x[1]);
+			SET_X2(rs->x[2]);
+			SET_X3(rs->x[3]);
+			SET_X4(rs->x[4]);
+			SET_X5(rs->x[5]);
+			SET_X6(rs->x[6]);
+			SET_X7(rs->x[7]);
+			SET_X8(rs->x[8]);
+			SET_X9(rs->x[9]);
+			SET_X10(rs->x[10]);
+			SET_X11(rs->x[11]);
+			SET_X12(rs->x[12]);
+			SET_X13(rs->x[13]);
+			SET_X14(rs->x[14]);
+			SET_X15(rs->x[15]);
+			SET_X16(rs->x[16]);
+			SET_X17(rs->x[17]);
+			SET_X18(rs->x[18]);
+			SET_X19(rs->x[19]);
+			SET_X20(rs->x[20]);
+			SET_X21(rs->x[21]);
+			SET_X22(rs->x[22]);
+			SET_X23(rs->x[23]);
+			SET_X24(rs->x[24]);
+			SET_X25(rs->x[25]);
+			SET_X26(rs->x[26]);
+			SET_X27(rs->x[27]);
+			SET_X28(rs->x[28]);
+			SET_X29(rs->x[29]);
+			SET_X30(rs->x[30]);
+			SET_SP(rs->sp);
+			SET_PC_REG(rs->pc);
+
+			SET_FRAME_AARCH64((*rs).x[29], (*rs).sp);
+			SET_PC_REG((*rs).pc);
+
+			MIGERR("Should not reach here!\n");
+		}
 #else
 		SET_R12(md.r12[task->id]);
 		SET_R13(md.r13[task->id]);
@@ -320,6 +364,33 @@ migrate_resume_entry_point:
 		SET_R15(md.r15[task->id]);
 		SET_RBX(md.rbx[task->id]);
 		SET_RBP(md.rbp[task->id]);
+
+		if(md.popcorn_regs_valid) {
+			MIGLOG("Detected popcorn register set\n");
+			struct regset_x86_64 *rs =
+				(struct regset_x86_64 *)&(md.popcorn_x86_regs);
+
+			SET_RAX(rs->rax);
+			SET_RDX(rs->rdx);
+			SET_RCX(rs->rcx);
+			SET_RBX(rs->rbx);
+			SET_RSI(rs->rsi);
+			SET_RDI(rs->rdi);
+			SET_R8(rs->r8);
+			SET_R9(rs->r9);
+			SET_R10(rs->r10);
+			SET_R11(rs->r11);
+			SET_R12(rs->r12);
+			SET_R13(rs->r13);
+			SET_R14(rs->r14);
+			SET_R15(rs->r15);
+
+			SET_RSP(rs->rsp);
+			SET_RBP(rs->rbp);
+			SET_RIP_REG(rs->rip);
+
+			MIGERR("Should not reach here!\n");
+		}
 #endif
 
 		return 0;
@@ -411,6 +482,23 @@ migrate_resume_entry_point:
 	GET_RBP(md.rbp[task->id]);
 #endif
 
+	/* Checkpoint popcorn registers TODO fix this!! for now just homogeneous */
+	if(regset) {
+		MIGLOG("Writing popcorn register set in metadata\n");
+#ifdef __aarch64__
+		memcpy(&(md.popcorn_arm_regs), regset, sizeof(struct regset_aarch64));
+		memcpy(&(md.popcorn_x86_regs), regset, sizeof(struct regset_x86_64));
+#else
+		memcpy(&(md.popcorn_x86_regs), regset, sizeof(struct regset_x86_64));
+		memcpy(&(md.popcorn_arm_regs), regset, sizeof(struct regset_aarch64));
+#endif
+		md.popcorn_regs_valid = 1;
+	}
+	else {
+		MIGLOG("WARNING: no popcorn register set passed\n");
+		md.popcorn_regs_valid = 0;
+	}
+
 	/* Wait for secondary threads to finish their part of the migration */
 	sec_threads_barrier = atomic_int32_read(&sec_threads_ready);
 	while(sec_threads_barrier != 1) {
@@ -461,7 +549,7 @@ void migrate_init(void) {
  * -1 if issue saving state (on source machine)
  * -2 if issue restoring state (on target machine)
  */
-int migrate_if_needed(void) {
+int migrate_if_needed(void *regset) {
 
 	if(atomic_int32_read(&should_migrate) == 1) {
 		/* Wait for every thread to be in a migratable state TODO use sem? */
@@ -474,7 +562,7 @@ int migrate_if_needed(void) {
 
 		/* reset migration flag */
 		atomic_int32_set(&should_migrate, 0);
-		return sys_migrate();
+		return sys_migrate(regset);
 	}
 
 	return 1;
