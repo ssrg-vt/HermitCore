@@ -225,15 +225,25 @@ int save_tls(uint64_t tls_size, int task_id) {
 	return 0;
 }
 
+/* A dedicated thread calls this function. This function reads the heap page by page.
+ * If any page is absent, a page fault occures which retrives the page from the source
+ * machine. It helps prefetching heap after migration.
+ */
 int periodic_page_access(void *arg)
 {
-	unsigned long long *i, j;
-	for(i = (unsigned long long*)HEAP_START; 
-			i < (unsigned long long*)HEAP_SIZE; i = i+PAGE_SIZE)
+	uint64_t *i;
+	volatile char j;
+
+	restore_heap(md.heap_start, md.heap_size);
+
+	LOG_INFO("Prefetching starts here\n");	
+	for(i = md.heap_start; i < md.heap_start+md.heap_size; 
+					i = i+(PAGE_SIZE/sizeof(uint64_t*)))
 	{
 		j = *i;
 		//sleep();
 	}
+	LOG_INFO("Prefetching ends here\n");	
 	
 	return 0;
 }
