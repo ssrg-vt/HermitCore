@@ -18,6 +18,9 @@
 #include <hermit/migration-x86-regs.h>
 #endif
 
+/* Moved this here from fcntl.h */
+#define O_RDONLY       0x000
+
 #include <hermit/migration.h>
 
 #ifdef __aarch64__
@@ -34,6 +37,12 @@
 })
 #endif
 
+typedef struct {
+	uint64_t heap_size;
+        uint64_t bss_size;
+} __attribute__ ((packed)) uhyve_migration_t;
+
+
 /* atomic variable set to 1 when application should migrate */
 extern atomic_int32_t should_migrate;
 
@@ -45,6 +54,9 @@ extern const void kernel_start;
 extern const void __bss_start;
 extern const void __data_start;
 extern const void __data_end;
+
+/* Main Core */
+extern uint32_t boot_processor;
 
 /* Keep track of the number of threads running. When a thread enters the
  * migration code, there is a barrier waiting for all running threads to reach
@@ -103,7 +115,7 @@ static int restore_bss(uint64_t bss_size) {
 	return migrate_restore_area(CHKPT_BSS_FILE, (size_t)&__bss_start, bss_size);
 }
 
-static int restore_heap(uint64_t heap_size) {
+static int restore_heap(uint64_t heap_start, uint64_t heap_size) {
 	size_t heap = HEAP_START;
 	task_t* curr_task = per_core(current_task);
 	uint64_t i;
@@ -120,6 +132,11 @@ static int restore_heap(uint64_t heap_size) {
 	curr_task->heap->start = PAGE_CEIL(heap);
 	curr_task->heap->end = PAGE_CEIL(heap);
 
+	/* Check that the heap is located at the same address as previously */
+	if(curr_task->heap->start != heap_start)
+		MIGERR("Heap starts at 0x%x but was previously located at 0x%x\n",
+                                curr_task->heap->start, heap_start);
+
 	// region is already reserved for the heap, we have to change the
 	// property of the first page
 	vma_free(curr_task->heap->start, curr_task->heap->start+PAGE_SIZE);
@@ -130,15 +147,19 @@ static int restore_heap(uint64_t heap_size) {
 		MIGERR("Cannot reallocate heap, out of memory\n");
 		return -1;
 	}
-	/* Heap is mapped on demand, touch the first byte of each page */
-	for(i=curr_task->heap->start; i<curr_task->heap->end; i+= PAGE_SIZE)
-		memset((void *)i, 0x0, 0x1);
 
-	MIGLOG("Restore heap from 0x%llx, size 0x%llx\n", curr_task->heap->start,
-			heap_size);
+        curr_task->migrated_heap = kmalloc(sizeof(migrated_heap_t));
+        if(!curr_task->migrated_heap) {
+                MIGERR("Cannot allocate memory for migrated_heap_t\n");
+                return -1;
+        }
 
-	return migrate_restore_area_not_contiguous(CHKPT_HEAP_FILE,
-			curr_task->heap->start, heap_size);
+        /* We just write here info about the migrated heap, and will actually
+         * populate the content later (see page_fault_handler in mm/page.c */
+        curr_task->migrated_heap->size = heap_size;
+        curr_task->migrated_heap->fd = sys_open(CHKPT_HEAP_FILE, O_RDONLY, 0x0);
+
+        return 0;
 }
 
 int checkpoint_heap(void) {
@@ -218,6 +239,29 @@ int save_tls(uint64_t tls_size, int task_id) {
 	return 0;
 }
 
+/* A dedicated thread calls this function. This function reads the heap page by page.
+ * If any page is absent, a page fault occures which retrives the page from the source
+ * machine. It helps prefetching heap after migration.
+ */
+int periodic_page_access(void *arg)
+{
+	uint64_t *i;
+	volatile char j;
+
+	restore_heap(md.heap_start, md.heap_size);
+
+	LOG_INFO("Prefetching starts here\n");	
+	for(i = md.heap_start; i < md.heap_start+md.heap_size; 
+					i = i+(PAGE_SIZE/sizeof(uint64_t*)))
+	{
+		j = *i;
+		//sleep();
+	}
+	LOG_INFO("Prefetching ends here\n");	
+	
+	return 0;
+}
+
 /* Returns -1 if migration attemp failed (on the source), 0 if we are back from
  * successful migration on the target, -2 if something went wrong during state
  * restoration on target
@@ -236,6 +280,7 @@ migrate_resume_entry_point:
 	if(mig_resuming) {
 		task_t *task = per_core(current_task);
 		static int primary_flag = 1;
+		unsigned int periodic_page_access_id;
 
 		MIGLOG("Thread %d (%s) enters resume code\n", task->id,
 				primary_flag ? "primary" : "secondary");
@@ -258,7 +303,7 @@ migrate_resume_entry_point:
 				return -2;
 			}
 
-			if(restore_heap(md.heap_size)) {
+			if(restore_heap(md.heap_start, md.heap_size)) {
 				MIGERR("Cannot restore heap after migration\n");
 				return -2;
 			}
@@ -393,6 +438,9 @@ migrate_resume_entry_point:
 		}
 #endif
 
+		create_kernel_task_on_core((tid_t *)&periodic_page_access_id, 
+				periodic_page_access, NULL, NORMAL_PRIO, boot_processor);
+
 		return 0;
 	}
 
@@ -423,8 +471,12 @@ migrate_resume_entry_point:
 	uint64_t bss_size, data_size;
 	uint32_t sec_threads_barrier;
 
-	/* Save heap */
+        /* Close fd to migrated heap if needed then save heap */
+        if(task->migrated_heap)
+                sys_close(task->migrated_heap->fd);
+
 	md.heap_size = task->heap->end - task->heap->start;
+	md.heap_start = task->heap->start;
 	if(checkpoint_heap())
 		return -1;
 
@@ -519,7 +571,8 @@ migrate_resume_entry_point:
 
 	/* Finally the main task sends the migration signal to uhyve */
 	MIGLOG("Thread %d (primary) done with migration\n", task->id);
-	uhyve_send(UHYVE_PORT_MIGRATE, 0);
+	uhyve_migration_t arg = {md.heap_size, md.bss_size};
+	uhyve_send(UHYVE_PORT_MIGRATE, (unsigned)virt_to_phys((size_t)&arg));
 
 	/* Should never reach here */
 	MIGERR("Migration - source: should not reach that point\n");

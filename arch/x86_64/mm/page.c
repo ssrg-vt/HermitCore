@@ -47,9 +47,20 @@
 #include <asm/page.h>
 #include <asm/uhyve.h>
 
+/* copied here from fcntl.h */
+#define SEEK_SET       0x000
+
+typedef enum {
+       PFAULT_FATAL,
+       PFAULT_HEAP
+} pfault_type_t;
+
+
 typedef struct {
 	uint64_t rip;
-	uint64_t addr;
+	uint64_t vaddr;
+	uint64_t paddr;
+	pfault_type_t type;
 	int success;
 } __attribute__ ((packed)) uhyve_pfault_t;
 
@@ -239,6 +250,8 @@ void page_fault_handler(struct state *s)
 		if (check_pagetables(viraddr)) {
 			//tlb_flush_one_page(viraddr, 0);
 			spinlock_irqsave_unlock(&page_lock);
+
+
 			return;
 		}
 
@@ -265,6 +278,21 @@ void page_fault_handler(struct state *s)
 
 		spinlock_irqsave_unlock(&page_lock);
 
+                /* On-demand heap migration: populate the page */
+       	        if(task->migrated_heap &&
+               	                viraddr < (task->heap->start + task->migrated_heap->size)) {
+
+                       	/* Call uhyve to populate the page */
+                       	uhyve_pfault_t arg = {s->rip, viraddr, phyaddr, PFAULT_HEAP, 0};
+                       	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
+
+                    	if(!arg.success)
+                        	goto default_handler;
+
+                        spinlock_irqsave_unlock(&page_lock);
+                        return;
+                }
+
 		// clear cr2 to signalize that the pagefault is solved by the pagefault handler
 		write_cr2(0);
 
@@ -275,8 +303,8 @@ default_handler:
 
 	spinlock_irqsave_unlock(&page_lock);
 
-	/* Send page fault to the host */
-	uhyve_pfault_t arg = {s->rip, viraddr, -1};
+	/* Send page fault info to the host */
+        uhyve_pfault_t arg = {s->rip, viraddr, 0, PFAULT_FATAL, 0};
 	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
 
 	LOG_ERROR("Page Fault Exception (%d) on core %d at cs:ip = %#x:%#lx, fs = %#lx, gs = %#lx, rflags 0x%lx, task = %u, addr = %#lx, error = %#x [ %s %s %s %s %s ]\n",
