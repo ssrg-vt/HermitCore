@@ -349,9 +349,6 @@ migrate_resume_entry_point:
 			SET_X28(rs->x[28]);
 			SET_X29(rs->x[29]);
 			SET_X30(rs->x[30]);
-			SET_SP(rs->sp);
-			SET_PC_REG(rs->pc);
-
 			SET_FRAME_AARCH64((*rs).x[29], (*rs).sp);
 			SET_PC_REG((*rs).pc);
 
