@@ -299,74 +299,42 @@ migrate_resume_entry_point:
 
 		/* Restore callee-saved registers or the full set of popcorn regs */
 #ifdef __aarch64__
-		// x19 -> x28 + frame pointer (x29) + link register (ret. addr, x30)
-		SET_X19(md.x19[task->id]);
-		SET_X20(md.x20[task->id]);
-		SET_X21(md.x21[task->id]);
-		SET_X22(md.x22[task->id]);
-		SET_X23(md.x23[task->id]);
-		SET_X24(md.x24[task->id]);
-		SET_X25(md.x25[task->id]);
-		SET_X26(md.x26[task->id]);
-		SET_X27(md.x27[task->id]);
-		SET_X28(md.x28[task->id]);
-		SET_X29(md.x29[task->id]);
-		SET_X30(md.x30[task->id]);
-
 		if(md.popcorn_regs_valid) {
 			MIGLOG("Detected popcorn register set\n");
 			struct regset_aarch64 *rs =
 				(struct regset_aarch64 *)&(md.popcorn_arm_regs);
 
-			SET_X0(rs->x[0]);
-			SET_X1(rs->x[1]);
-			SET_X2(rs->x[2]);
-			SET_X3(rs->x[3]);
-			SET_X4(rs->x[4]);
-			SET_X5(rs->x[5]);
-			SET_X6(rs->x[6]);
-			SET_X7(rs->x[7]);
-			SET_X8(rs->x[8]);
-			SET_X9(rs->x[9]);
-			SET_X10(rs->x[10]);
-			SET_X11(rs->x[11]);
-			SET_X12(rs->x[12]);
-			SET_X13(rs->x[13]);
-			SET_X14(rs->x[14]);
-			SET_X15(rs->x[15]);
-			SET_X16(rs->x[16]);
-			SET_X17(rs->x[17]);
-			SET_X18(rs->x[18]);
-			SET_X19(rs->x[19]);
-			SET_X20(rs->x[20]);
-			SET_X21(rs->x[21]);
-			SET_X22(rs->x[22]);
-			SET_X23(rs->x[23]);
-			SET_X24(rs->x[24]);
-			SET_X25(rs->x[25]);
-			SET_X26(rs->x[26]);
-			SET_X27(rs->x[27]);
-			SET_X28(rs->x[28]);
-			SET_X29(rs->x[29]);
-			SET_X30(rs->x[30]);
+			for(int i=0; i<31; i++)
+				MIGLOG(" restoring x%d: 0x%llx\n", i, rs->x[i]);
+
+			SET_REGS_AARCH64(*rs);
 			SET_FRAME_AARCH64((*rs).x[29], (*rs).sp);
 			SET_PC_REG((*rs).pc);
 
 			MIGERR("Should not reach here!\n");
+		} else {
+			/* Old homogeneous migration stuff, to be removed */
+			// x19 -> x28 + frame pointer (x29) + link register (ret. addr, x30)
+			SET_X19(md.x19[task->id]);
+			SET_X20(md.x20[task->id]);
+			SET_X21(md.x21[task->id]);
+			SET_X22(md.x22[task->id]);
+			SET_X23(md.x23[task->id]);
+			SET_X24(md.x24[task->id]);
+			SET_X25(md.x25[task->id]);
+			SET_X26(md.x26[task->id]);
+			SET_X27(md.x27[task->id]);
+			SET_X28(md.x28[task->id]);
+			SET_X29(md.x29[task->id]);
+			SET_X30(md.x30[task->id]);
 		}
 #else
-		SET_R12(md.r12[task->id]);
-		SET_R13(md.r13[task->id]);
-		SET_R14(md.r14[task->id]);
-		SET_R15(md.r15[task->id]);
-		SET_RBX(md.rbx[task->id]);
-		SET_RBP(md.rbp[task->id]);
-
 		if(md.popcorn_regs_valid) {
 			MIGLOG("Detected popcorn register set\n");
 			struct regset_x86_64 *rs =
 				(struct regset_x86_64 *)&(md.popcorn_x86_regs);
 
+			/* TODO update this to use a simpler macro */
 			SET_RAX(rs->rax);
 			SET_RDX(rs->rdx);
 			SET_RCX(rs->rcx);
@@ -387,6 +355,14 @@ migrate_resume_entry_point:
 			SET_RIP_REG(rs->rip);
 
 			MIGERR("Should not reach here!\n");
+		} else {
+			/* Old homogeneous migration stuff, to be removed */
+			SET_R12(md.r12[task->id]);
+			SET_R13(md.r13[task->id]);
+			SET_R14(md.r14[task->id]);
+			SET_R15(md.r15[task->id]);
+			SET_RBX(md.rbx[task->id]);
+			SET_RBP(md.rbp[task->id]);
 		}
 #endif
 
@@ -479,7 +455,7 @@ migrate_resume_entry_point:
 	GET_RBP(md.rbp[task->id]);
 #endif
 
-	/* Checkpoint popcorn registers TODO fix this!! for now just homogeneous */
+	/* Checkpoint popcorn registers */
 	if(regset) {
 		MIGLOG("Writing popcorn register set in metadata\n");
 #ifdef __aarch64__
