@@ -234,9 +234,10 @@ int check_pagetables(size_t vaddr)
 
 void page_fault_handler(struct state *s)
 {
+	int i=0;
 	size_t viraddr = read_cr2();
 	task_t* task = per_core(current_task);
-
+	
 	spinlock_irqsave_lock(&page_lock);
 
 	if (((task->heap) && (viraddr >= task->heap->start) && (viraddr < task->heap->end))
@@ -261,6 +262,7 @@ void page_fault_handler(struct state *s)
 		size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
 		if (BUILTIN_EXPECT(!phyaddr, 0)) {
 			LOG_ERROR("out of memory: task = %u\n", task->id);
+			i=1;
 			goto default_handler;
 		}
 
@@ -273,6 +275,7 @@ void page_fault_handler(struct state *s)
 			LOG_ERROR("map_region: could not map %#lx to %#lx, task = %u\n", phyaddr, viraddr, task->id);
 			put_page(phyaddr);
 
+			i=2;
 			goto default_handler;
 		}
 
@@ -287,7 +290,10 @@ void page_fault_handler(struct state *s)
                        	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
 
                     	if(!arg.success)
-                        	goto default_handler;
+                        { 	
+				i=3;
+				goto default_handler;
+			}
 
                         spinlock_irqsave_unlock(&page_lock);
                         return;
@@ -307,8 +313,8 @@ default_handler:
         uhyve_pfault_t arg = {s->rip, viraddr, 0, PFAULT_FATAL, 0};
 	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
 
-	LOG_ERROR("Page Fault Exception (%d) on core %d at cs:ip = %#x:%#lx, fs = %#lx, gs = %#lx, rflags 0x%lx, task = %u, addr = %#lx, error = %#x [ %s %s %s %s %s ]\n",
-		s->int_no, CORE_ID, s->cs, s->rip, s->fs, s->gs, s->rflags, task->id, viraddr, s->error,
+	LOG_ERROR("%d Page Fault Exception (%d) on core %d at cs:ip = %#x:%#lx, fs = %#lx, gs = %#lx, rflags 0x%lx, task = %u, addr = %#lx, error = %#x [ %s %s %s %s %s ]\n",
+		i, s->int_no, CORE_ID, s->cs, s->rip, s->fs, s->gs, s->rflags, task->id, viraddr, s->error,
 		(s->error & 0x4) ? "user" : "supervisor",
 		(s->error & 0x10) ? "instruction" : "data",
 		(s->error & 0x2) ? "write" : ((s->error & 0x10) ? "fetch" : "read"),
@@ -317,7 +323,7 @@ default_handler:
 	LOG_ERROR("rax %#lx, rbx %#lx, rcx %#lx, rdx %#lx, rbp, %#lx, rsp %#lx rdi %#lx, rsi %#lx, r8 %#lx, r9 %#lx, r10 %#lx, r11 %#lx, r12 %#lx, r13 %#lx, r14 %#lx, r15 %#lx\n",
 		s->rax, s->rbx, s->rcx, s->rdx, s->rbp, s->rsp, s->rdi, s->rsi, s->r8, s->r9, s->r10, s->r11, s->r12, s->r13, s->r14, s->r15);
 	if (task->heap)
-		LOG_ERROR("Heap 0x%llx - 0x%llx\n", task->heap->start, task->heap->end);
+		LOG_ERROR("VAddr = 0x%llx Heap 0x%llx - 0x%llx\n", viraddr, task->heap->start, task->heap->end);
 
 	// clear cr2 to signalize that the pagefault is solved by the pagefault handler
 	write_cr2(0);

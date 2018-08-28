@@ -268,12 +268,10 @@ int page_fault_handler(size_t viraddr, size_t pc)
 
 		spinlock_irqsave_unlock(&page_lock);
 
-		LOG_INFO("1. Here\n");
                 /* On-demand heap migration: populate the page */
       	        if(task->migrated_heap &&
                	                viraddr < (task->heap->start + task->migrated_heap->size)) {
                        	/* Call uhyve to populate the page */
-			LOG_INFO("2. Here\n");
                        	uhyve_pfault_t arg = {pc, viraddr, phyaddr, PFAULT_HEAP, 0};
 
                        	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
