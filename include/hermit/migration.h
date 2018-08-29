@@ -34,6 +34,11 @@ void init_threads_to_resume(int num_threads);
 #include <stdio.h>
 #include <stdlib.h>
 
+/* Direcltly called by popcorn after stack is transformed */
+int sys_migrate(void *regset);
+/* Triggers migration if the flag is set */
+void popcorn_check_migrate(void);
+
 __attribute__ ((no_instrument_function)) static inline int hermit_migpoint(void *regset) {
 	int r = migrate_if_needed(regset);
 	if(r < 0) {
@@ -55,20 +60,6 @@ __attribute__ ((no_instrument_function)) static inline int hermit_force_migratio
 #define HERMIT_MIGPOINT(regset) 			hermit_migpoint(regset)
 /* Use this macro to force migration */
 #define HERMIT_FORCE_MIGRATION(regset)	hermit_force_migration(regset)
-
-/* Instrumentation functions are already defined in the popcorn migration
- * library, disable them here for now */
-#if 0
-__attribute__((no_instrument_function)) static void __cyg_profile_func_enter (void *this_fn,
-                               void *call_site) {
-	HERMIT_MIGPOINT();
-}
-
-__attribute__((no_instrument_function)) static void __cyg_profile_func_exit  (void *this_fn,
-                               void *call_site) {
-	HERMIT_MIGPOINT();
-}
-#endif
 
 #endif /* __KERNEL__ */
 

@@ -204,7 +204,9 @@ int migration_fd_del(int app_fd) {
 		}
 
 	spinlock_irqsave_unlock(&fd_array_lock);
-	MIGERR("Migration fd del on non existing fd (%d)\n", app_fd);
+
+	/* FIXME: this should actually be an error but there is a bug somewehre */
+	MIGLOG("WARNING: Migration fd del on non existing fd (%d)\n", app_fd);
 	return -1;
 }
 

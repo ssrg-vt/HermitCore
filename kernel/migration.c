@@ -240,6 +240,9 @@ migrate_resume_entry_point:
 		MIGLOG("Thread %d (%s) enters resume code\n", task->id,
 				primary_flag ? "primary" : "secondary");
 		if(primary_flag) {
+			/* FIXME: we probably don't need to call this here, there is a bug
+			 * somewhere */
+			set_primary_thread_id(task->id);
 			primary_flag = 0;
 
 			/* get metadata */
@@ -268,6 +271,7 @@ migrate_resume_entry_point:
 				return -2;
 			}
 
+#if 0
 			int i = 1;
 			while(md.task_ids[i] != 0) {
 				unsigned int id;
@@ -277,24 +281,27 @@ migrate_resume_entry_point:
 						id, md.task_ids[i]);
 				i++;
 			}
+#endif
 		}
 
 		if(restore_tls(md.tls_size, task->id)) {
 			MIGERR("Cannot restore TLS after migration\n");
 			return -2;
 		}
-
+#if 0
 		/* Barrier: all threads sync here before resuming */
 		int ret = atomic_int32_dec(&threads_to_resume);
 		while(ret != 0) {
 			reschedule();
 			ret = atomic_int32_read(&threads_to_resume);
 		}
+#endif
 
 		MIGLOG("Thread %u (%s): state restored, back to execution\n", task->id,
 				(task->id == primary_thread_id) ? "primary" : "secondary");
-
+#if 0
 		if(task->id == primary_thread_id)
+#endif
 			mig_resuming = 0;
 
 		/* Restore callee-saved registers or the full set of popcorn regs */
@@ -303,9 +310,6 @@ migrate_resume_entry_point:
 			MIGLOG("Detected popcorn register set\n");
 			struct regset_aarch64 *rs =
 				(struct regset_aarch64 *)&(md.popcorn_arm_regs);
-
-			for(int i=0; i<31; i++)
-				MIGLOG(" restoring x%d: 0x%llx\n", i, rs->x[i]);
 
 			SET_REGS_AARCH64(*rs);
 			SET_FRAME_AARCH64((*rs).x[29], (*rs).sp);
@@ -383,6 +387,7 @@ migrate_resume_entry_point:
 		if(save_tls(task->tls_size, task->id))
 			return -1;
 
+#if 0
 	/* After that point only the main thread continues */
 	if(!is_main_task) {
 		atomic_int32_dec(&sec_threads_ready);
@@ -390,11 +395,14 @@ migrate_resume_entry_point:
 				"primary\n", task->id);
 		while(1) sys_msleep(1000);
 	}
+#endif
 
 	/* The main thread is responsible for saving heap, bss, data, file
 	 * descriptors, and the instruction pointer (same for all threads) */
 	uint64_t bss_size, data_size;
+#if 0
 	uint32_t sec_threads_barrier;
+#endif
 
 	/* Save heap */
 	md.heap_size = task->heap->end - task->heap->start;
@@ -472,12 +480,14 @@ migrate_resume_entry_point:
 		md.popcorn_regs_valid = 0;
 	}
 
+#if 0
 	/* Wait for secondary threads to finish their part of the migration */
 	sec_threads_barrier = atomic_int32_read(&sec_threads_ready);
 	while(sec_threads_barrier != 1) {
 		reschedule();
 		sec_threads_barrier = atomic_int32_read(&sec_threads_ready);
 	}
+#endif
 
 	/* Save fds here, as we know all the secondary threads are done,
 	 * because we don't want to checkpoint the fds corresponding to
