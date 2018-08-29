@@ -498,7 +498,7 @@ struct regset_aarch64
   SET_X27((regset_aarch64).x[27]); \
   SET_X28((regset_aarch64).x[28]); \
   SET_X30((regset_aarch64).x[30]); \
-  SET_FP_REGS_AARCH64(regset_aarch64); \
+  SET_FP_REGS_NOCLOBBER_AARCH64(regset_aarch64); \
 }
 
 /* Get frame information. */
