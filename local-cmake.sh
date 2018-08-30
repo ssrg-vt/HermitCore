@@ -4,18 +4,25 @@
 # standard location without using the install_copiler.py script (i.e. without
 # having to rebuild the entire toolchain.
 
-# Set this to x86_64 or aarch64
-ARCH=x86_64
 INSTALL_PATH=$HOME/hermit-popcorn/
 
 # Cleanup any existing build directory and re-create it
-rm -rf build/
-mkdir build
+rm -rf build-x86-64
+rm -rf build-aarch64
+mkdir build-x86-64
+mkdir build-aarch64
 
 # Get into the directory and call cmake with the rgiht parameters
-cd build
+cd build-x86-64
+cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
+	-DCOMPILER_BIN_DIR=$INSTALL_PATH/x86_64-host/bin \
+	-DHERMIT_PREFIX=$INSTALL_PATH/x86_64-host \
+	-DMIGRATION_LOG=1 \
+	-DKERNEL_DEBUG=1 \
+	..
+cd -
 
-if [ "$ARCH" == "aarch64" ]; then
+cd build-aarch64
 cmake -DHERMIT_ARCH=aarch64 \
 	-DTARGET_ARCH=aarch64-hermit \
 	-DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
@@ -24,15 +31,4 @@ cmake -DHERMIT_ARCH=aarch64 \
 	-DMIGRATION_LOG=1 \
 	-DKERNEL_DEBUG=1 \
 	..
-else
-
-cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH \
-	-DCOMPILER_BIN_DIR=$INSTALL_PATH/x86_64-host/bin \
-	-DHERMIT_PREFIX=$INSTALL_PATH/x86_64-host \
-	-DMIGRATION_LOG=1 \
-	-DKERNEL_DEBUG=1 \
-	..
-fi
-
-
 cd -
