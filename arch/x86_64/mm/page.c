@@ -274,10 +274,9 @@ void page_fault_handler(struct state *s)
 
 			uhyve_send(UHYVE_PORT_PFAULT,
 					(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
+
 			if(!pfault_hcall_arg.success)
 				goto default_handler;
-
-			return;
 		}
 
 		spinlock_irqsave_unlock(&page_lock);

@@ -259,19 +259,17 @@ int page_fault_handler(size_t viraddr, size_t pc)
 				viraddr < (task->heap->start + task->migrated_heap)) {
 
 				/* Call uhyve to populate the page */
-			   pfault_hcall_arg.rip = pc;
-			   pfault_hcall_arg.paddr = phyaddr;
-			   pfault_hcall_arg.vaddr = viraddr;
-			   pfault_hcall_arg.type = PFAULT_HEAP;
-			   pfault_hcall_arg.success = 0;
+			pfault_hcall_arg.rip = pc;
+			pfault_hcall_arg.paddr = phyaddr;
+			pfault_hcall_arg.vaddr = viraddr;
+			pfault_hcall_arg.type = PFAULT_HEAP;
+			pfault_hcall_arg.success = 0;
 
-				uhyve_send(UHYVE_PORT_PFAULT,
-						(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
+			uhyve_send(UHYVE_PORT_PFAULT,
+					(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
 
-				if(!pfault_hcall_arg.success)
-					goto default_handler;
-
-				return 0;
+			if(!pfault_hcall_arg.success)
+				goto default_handler;
 		}
 
 		spinlock_irqsave_unlock(&page_lock);
