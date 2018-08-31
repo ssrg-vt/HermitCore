@@ -46,21 +46,6 @@
 #include <asm/page.h>
 #include <asm/uhyve.h>
 
-/* copied here from fcntl.h */
-#define SEEK_SET       0x000
-
-typedef enum {
-       PFAULT_FATAL,
-       PFAULT_HEAP
-} pfault_type_t;
-
-typedef struct {
-	uint64_t rip;
-	uint64_t vaddr;
-	uint64_t paddr;
-	int success;
-} __attribute__ ((packed)) uhyve_pfault_t;
-
 /* Note that linker symbols are not variables, they have no memory
  * allocated for maintaining a value, rather their address is their value. */
 extern const void kernel_start;
@@ -228,7 +213,9 @@ int check_pagetables(size_t vaddr) {
 	return 1;
 }
 
-
+/* FIXME: we get some strange bug when the page fault hypercall parameter is
+ * passed on the stack ... */
+uhyve_pfault_t pfault_hcall_arg;
 int page_fault_handler(size_t viraddr, size_t pc)
 {
 	task_t* task = per_core(current_task);
@@ -266,21 +253,28 @@ int page_fault_handler(size_t viraddr, size_t pc)
 			goto default_handler;
 		}
 
+
+		/* On-demand heap migration: populate the page */
+		if(task->migrated_heap &&
+				viraddr < (task->heap->start + task->migrated_heap->size)) {
+
+				/* Call uhyve to populate the page */
+			   pfault_hcall_arg.rip = pc;
+			   pfault_hcall_arg.paddr = phyaddr;
+			   pfault_hcall_arg.vaddr = viraddr;
+			   pfault_hcall_arg.type = PFAULT_HEAP;
+			   pfault_hcall_arg.success = 0;
+
+				uhyve_send(UHYVE_PORT_PFAULT,
+						(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
+
+				if(!pfault_hcall_arg.success)
+					goto default_handler;
+
+				return 0;
+		}
+
 		spinlock_irqsave_unlock(&page_lock);
-
-                /* On-demand heap migration: populate the page */
-      	        if(task->migrated_heap &&
-               	                viraddr < (task->heap->start + task->migrated_heap->size)) {
-                       	/* Call uhyve to populate the page */
-                       	uhyve_pfault_t arg = {pc, viraddr, phyaddr, PFAULT_HEAP, 0};
-
-                       	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
-                    	if(!arg.success)
-                        	goto default_handler;
-                        spinlock_irqsave_unlock(&page_lock);
-                        return 0;
-                }
-
 		return 0;
 	}
 

@@ -36,6 +36,20 @@
 #ifndef __MEMORY_H__
 #define __MEMORY_H__
 
+/* Popcorn datastructures for on demand memory transfer */
+typedef enum {
+       PFAULT_FATAL,
+       PFAULT_HEAP
+} pfault_type_t;
+
+typedef struct {
+	uint64_t rip;
+	uint64_t vaddr;
+	uint64_t paddr;
+	pfault_type_t type;
+	uint8_t success;
+} __attribute__ ((packed)) uhyve_pfault_t;
+
 /** @brief Initialize the memory subsystem */
 int memory_init(void);
 
