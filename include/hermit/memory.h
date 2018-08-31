@@ -38,7 +38,7 @@
 
 /* Popcorn datastructures for on demand memory transfer */
 typedef enum {
-       PFAULT_FATAL,
+       PFAULT_FATAL = 0,
        PFAULT_HEAP
 } pfault_type_t;
 
