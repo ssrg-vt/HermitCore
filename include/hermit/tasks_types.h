@@ -67,13 +67,6 @@ extern "C" {
 #define LOW_PRIO	1
 #define IDLE_PRIO	0
 
-/* Represent the part of the heap that is migrated (as oppposed to the rest
- * of the heap that is simply allocated on demand */
-typedef struct migrated_heap_s {
-       uint64_t size;  // Offset fromm the start of the heap defining the region migrated
-       int fd;         // Open FD on the file containing the migrated heap content
-} migrated_heap_t;
-
 typedef int (*entry_point_t)(void*);
 
 /** @brief Represents a the process control block */
@@ -102,8 +95,12 @@ typedef struct task {
 	uint64_t		last_tsc;
 	/// the userspace heap
 	vma_t*			heap;
-	/// Pierre: migrated part of the heap
-        migrated_heap_t *migrated_heap;
+	/// Popcorn migrated part of the heap: the first access to somewhere in the
+	/// heap will page fault. If the access is located between the start of the
+	/// heap and migrated_heap, it means we have to fetch the memory from the
+	/// remote sever. If the access is past migrated_heap, then it means we just
+	/// have to map the page
+	uint64_t migrated_heap;
 	/// parent thread
 	tid_t			parent;
 	/// next task in the queue

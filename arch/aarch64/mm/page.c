@@ -256,7 +256,7 @@ int page_fault_handler(size_t viraddr, size_t pc)
 
 		/* On-demand heap migration: populate the page */
 		if(task->migrated_heap &&
-				viraddr < (task->heap->start + task->migrated_heap->size)) {
+				viraddr < (task->heap->start + task->migrated_heap)) {
 
 				/* Call uhyve to populate the page */
 			   pfault_hcall_arg.rip = pc;

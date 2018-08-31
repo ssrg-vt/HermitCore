@@ -263,7 +263,7 @@ void page_fault_handler(struct state *s)
 
 		/* On-demand heap migration: populate the page */
 		if(task->migrated_heap &&
-				viraddr < (task->heap->start + task->migrated_heap->size)) {
+				viraddr < (task->heap->start + task->migrated_heap)) {
 
 			/* Call uhyve to populate the page */
 			pfault_hcall_arg.rip = s->rip;
