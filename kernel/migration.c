@@ -234,12 +234,14 @@ int save_tls(uint64_t tls_size, int task_id) {
  * If any page is absent, a page fault occures which retrives the page from the source
  * machine. It helps prefetching heap after migration.
  */
-#define REMOTE_MEM_THREAD_DELAY_MS	100
+#define REMOTE_MEM_THREAD_DELAY_MS	200
+#define VALID_ADDRESSES_TO_TRY		16
 int periodic_page_access(void *arg)
 {
 	uint64_t i;
 	char j;
 	uint64_t start, stop;
+	int valid_addreses_found = 0;
 
 	MIGLOG("Remote memory thread starts\n");
 	task_t *task = per_core(current_task);
@@ -249,9 +251,20 @@ int periodic_page_access(void *arg)
 	start = task->heap->start;
 	stop = start + task->migrated_heap;
 
+	/* First check the page tables to see if the page is not already there. If
+	 * it is, check the next one, up to VALID_ADDRESSES_TO_TRY pages per
+	 * iteration */
 	for(i = start; i<stop; i += PAGE_SIZE) {
 		// MIGLOG("periodic: request 0x%llx\n", i);
+		if(check_pagetables(i)) {
+			if(++valid_addreses_found == VALID_ADDRESSES_TO_TRY) {
+				goto rmem_sleep;
+			} else { continue; }}
+
 		j = *((char *)i);
+
+rmem_sleep:
+		valid_addreses_found = 0;
 		sys_msleep(REMOTE_MEM_THREAD_DELAY_MS);
 	}
 
@@ -281,6 +294,9 @@ migrate_resume_entry_point:
 		MIGLOG("Thread %d (%s) enters resume code\n", task->id,
 				primary_flag ? "primary" : "secondary");
 		if(primary_flag) {
+			/* FIXME: we probably don't need to call this here, there is a bug
+			 * somewhere */
+			set_primary_thread_id(task->id);
 			primary_flag = 0;
 			primary_thread_id = task->id;
 
@@ -310,6 +326,7 @@ migrate_resume_entry_point:
 				return -2;
 			}
 
+#if 0
 			int i = 1;
 			while(md.task_ids[i] != 0) {
 				unsigned int id;
@@ -319,24 +336,27 @@ migrate_resume_entry_point:
 						id, md.task_ids[i]);
 				i++;
 			}
+#endif
 		}
 
 		if(restore_tls(md.tls_size, task->id)) {
 			MIGERR("Cannot restore TLS after migration\n");
 			return -2;
 		}
-
+#if 0
 		/* Barrier: all threads sync here before resuming */
 		int ret = atomic_int32_dec(&threads_to_resume);
 		while(ret != 0) {
 			reschedule();
 			ret = atomic_int32_read(&threads_to_resume);
 		}
+#endif
 
 		MIGLOG("Thread %u (%s): state restored, back to execution\n", task->id,
 				(task->id == primary_thread_id) ? "primary" : "secondary");
-
+#if 0
 		if(task->id == primary_thread_id)
+#endif
 			mig_resuming = 0;
 
 		/* mig_resuming needs to be set to 0 for the next clone_task to
@@ -350,80 +370,39 @@ migrate_resume_entry_point:
 
 		/* Restore callee-saved registers or the full set of popcorn regs */
 #ifdef __aarch64__
-
-		// x19 -> x28 + frame pointer (x29) + link register (ret. addr, x30)
-		// FIXME this is old homogeneous migration stuff, remove
-		SET_X19(md.x19[task->id]);
-		SET_X20(md.x20[task->id]);
-		SET_X21(md.x21[task->id]);
-		SET_X22(md.x22[task->id]);
-		SET_X23(md.x23[task->id]);
-		SET_X24(md.x24[task->id]);
-		SET_X25(md.x25[task->id]);
-		SET_X26(md.x26[task->id]);
-		SET_X27(md.x27[task->id]);
-		SET_X28(md.x28[task->id]);
-		SET_X29(md.x29[task->id]);
-		SET_X30(md.x30[task->id]);
-
 		if(md.popcorn_regs_valid) {
 			MIGLOG("Detected popcorn register set\n");
 			struct regset_aarch64 *rs =
 				(struct regset_aarch64 *)&(md.popcorn_arm_regs);
 
-			SET_X0(rs->x[0]);
-			SET_X1(rs->x[1]);
-			SET_X2(rs->x[2]);
-			SET_X3(rs->x[3]);
-			SET_X4(rs->x[4]);
-			SET_X5(rs->x[5]);
-			SET_X6(rs->x[6]);
-			SET_X7(rs->x[7]);
-			SET_X8(rs->x[8]);
-			SET_X9(rs->x[9]);
-			SET_X10(rs->x[10]);
-			SET_X11(rs->x[11]);
-			SET_X12(rs->x[12]);
-			SET_X13(rs->x[13]);
-			SET_X14(rs->x[14]);
-			SET_X15(rs->x[15]);
-			SET_X16(rs->x[16]);
-			SET_X17(rs->x[17]);
-			SET_X18(rs->x[18]);
-			SET_X19(rs->x[19]);
-			SET_X20(rs->x[20]);
-			SET_X21(rs->x[21]);
-			SET_X22(rs->x[22]);
-			SET_X23(rs->x[23]);
-			SET_X24(rs->x[24]);
-			SET_X25(rs->x[25]);
-			SET_X26(rs->x[26]);
-			SET_X27(rs->x[27]);
-			SET_X28(rs->x[28]);
-			SET_X29(rs->x[29]);
-			SET_X30(rs->x[30]);
-	//		SET_SP(rs->sp);
-	//		SET_PC_REG(rs->pc);
-
+			SET_REGS_AARCH64(*rs);
 			SET_FRAME_AARCH64((*rs).x[29], (*rs).sp);
 			SET_PC_REG((*rs).pc);
 
 			MIGERR("Should not reach here!\n");
+		} else {
+			/* Old homogeneous migration stuff, to be removed */
+			// x19 -> x28 + frame pointer (x29) + link register (ret. addr, x30)
+			SET_X19(md.x19[task->id]);
+			SET_X20(md.x20[task->id]);
+			SET_X21(md.x21[task->id]);
+			SET_X22(md.x22[task->id]);
+			SET_X23(md.x23[task->id]);
+			SET_X24(md.x24[task->id]);
+			SET_X25(md.x25[task->id]);
+			SET_X26(md.x26[task->id]);
+			SET_X27(md.x27[task->id]);
+			SET_X28(md.x28[task->id]);
+			SET_X29(md.x29[task->id]);
+			SET_X30(md.x30[task->id]);
 		}
 #else
-		/* FIXME: this is old homogeneous migration stuff, remove */
-		SET_R12(md.r12[task->id]);
-		SET_R13(md.r13[task->id]);
-		SET_R14(md.r14[task->id]);
-		SET_R15(md.r15[task->id]);
-		SET_RBX(md.rbx[task->id]);
-		SET_RBP(md.rbp[task->id]);
-
 		if(md.popcorn_regs_valid) {
 			MIGLOG("Detected popcorn register set\n");
 			struct regset_x86_64 *rs =
 				(struct regset_x86_64 *)&(md.popcorn_x86_regs);
 
+			/* TODO update this to use a simpler macro */
 			SET_RAX(rs->rax);
 			SET_RDX(rs->rdx);
 			SET_RCX(rs->rcx);
@@ -444,6 +423,14 @@ migrate_resume_entry_point:
 			SET_RIP_REG(rs->rip);
 
 			MIGERR("Should not reach here!\n");
+		} else {
+			/* Old homogeneous migration stuff, to be removed */
+			SET_R12(md.r12[task->id]);
+			SET_R13(md.r13[task->id]);
+			SET_R14(md.r14[task->id]);
+			SET_R15(md.r15[task->id]);
+			SET_RBX(md.rbx[task->id]);
+			SET_RBP(md.rbp[task->id]);
 		}
 #endif
 
@@ -465,6 +452,7 @@ migrate_resume_entry_point:
 		if(save_tls(task->tls_size, task->id))
 			return -1;
 
+#if 0
 	/* After that point only the main thread continues */
 	if(!is_main_task) {
 		atomic_int32_dec(&sec_threads_ready);
@@ -472,11 +460,14 @@ migrate_resume_entry_point:
 				"primary\n", task->id);
 		while(1) sys_msleep(1000);
 	}
+#endif
 
 	/* The main thread is responsible for saving heap, bss, data, file
 	 * descriptors, and the instruction pointer (same for all threads) */
 	uint64_t bss_size, data_size;
+#if 0
 	uint32_t sec_threads_barrier;
+#endif
 
 	md.heap_size = task->heap->end - task->heap->start;
 	md.heap_start = task->heap->start;
@@ -537,7 +528,7 @@ migrate_resume_entry_point:
 	GET_RBP(md.rbp[task->id]);
 #endif
 
-	/* Checkpoint popcorn registers TODO fix this!! for now just homogeneous */
+	/* Checkpoint popcorn registers */
 	if(regset) {
 		MIGLOG("Writing popcorn register set in metadata\n");
 #ifdef __aarch64__
@@ -554,12 +545,14 @@ migrate_resume_entry_point:
 		md.popcorn_regs_valid = 0;
 	}
 
+#if 0
 	/* Wait for secondary threads to finish their part of the migration */
 	sec_threads_barrier = atomic_int32_read(&sec_threads_ready);
 	while(sec_threads_barrier != 1) {
 		reschedule();
 		sec_threads_barrier = atomic_int32_read(&sec_threads_ready);
 	}
+#endif
 
 	/* Save fds here, as we know all the secondary threads are done,
 	 * because we don't want to checkpoint the fds corresponding to

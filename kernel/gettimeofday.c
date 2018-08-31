@@ -13,7 +13,11 @@ struct timeval {
 };
 
 void gettimeofday_init(void) {
+#ifdef __aarch64__
+	freq = get_cntfrq();
+#else
 	freq = get_cpu_frequency() * 1000000ULL;
+#endif
 }
 
 int sys_gettimeofday(struct timeval *tv, void *tz) {
