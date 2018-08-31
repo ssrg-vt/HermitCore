@@ -52,7 +52,7 @@ extern const void __bss_start;
 extern const void __data_start;
 extern const void __data_end;
 
-/* Main Core */
+/* Main Core on which we put the background thread pulling remote pages  */
 extern uint32_t boot_processor;
 
 /* Keep track of the number of threads running. When a thread enters the
@@ -129,9 +129,11 @@ static int restore_heap(uint64_t heap_start, uint64_t heap_size) {
 	curr_task->heap->end = PAGE_CEIL(heap);
 
 	/* Check that the heap is located at the same address as previously */
-	if(curr_task->heap->start != heap_start)
+	if(curr_task->heap->start != heap_start) {
 		MIGERR("Heap starts at 0x%x but was previously located at 0x%x\n",
                                 curr_task->heap->start, heap_start);
+		return -EINVAL;
+	}
 
 	// region is already reserved for the heap, we have to change the
 	// property of the first page
@@ -148,7 +150,7 @@ static int restore_heap(uint64_t heap_start, uint64_t heap_size) {
 	* populate the content later (see page_fault_handler in mm/page.c */
 	curr_task->migrated_heap = heap_size;
 
-        return 0;
+	return 0;
 }
 
 int checkpoint_heap(void) {
@@ -228,30 +230,34 @@ int save_tls(uint64_t tls_size, int task_id) {
 	return 0;
 }
 
-#if 0
 /* A dedicated thread calls this function. This function reads the heap page by page.
  * If any page is absent, a page fault occures which retrives the page from the source
  * machine. It helps prefetching heap after migration.
  */
+#define REMOTE_MEM_THREAD_DELAY_MS	100
 int periodic_page_access(void *arg)
 {
-	uint64_t *i;
-	volatile char j;
+	uint64_t i;
+	char j;
+	uint64_t start, stop;
 
-	restore_heap(md.heap_start, md.heap_size);
+	MIGLOG("Remote memory thread starts\n");
+	task_t *task = per_core(current_task);
 
-	LOG_INFO("Prefetching starts here\n");	
-	for(i = md.heap_start; i < md.heap_start+md.heap_size; 
-					i = i+(PAGE_SIZE/sizeof(uint64_t*)))
-	{
-		j = *i;
-		//sleep();
+	/* The main task uses clone_task to create this thread, thus it inheritates
+	 * info about the heap */
+	start = task->heap->start;
+	stop = start + task->migrated_heap;
+
+	for(i = start; i<stop; i += PAGE_SIZE) {
+		// MIGLOG("periodic: request 0x%llx\n", i);
+		j = *((char *)i);
+		sys_msleep(REMOTE_MEM_THREAD_DELAY_MS);
 	}
-	LOG_INFO("Prefetching ends here\n");	
-	
+
+	MIGLOG("Remote memory thread done\n");
 	return 0;
 }
-#endif
 
 /* Returns -1 if migration attemp failed (on the source), 0 if we are back from
  * successful migration on the target, -2 if something went wrong during state
@@ -271,12 +277,12 @@ migrate_resume_entry_point:
 	if(mig_resuming) {
 		task_t *task = per_core(current_task);
 		static int primary_flag = 1;
-//		unsigned int periodic_page_access_id;
 
 		MIGLOG("Thread %d (%s) enters resume code\n", task->id,
 				primary_flag ? "primary" : "secondary");
 		if(primary_flag) {
 			primary_flag = 0;
+			primary_thread_id = task->id;
 
 			/* get metadata */
 			if(migrate_restore_area(CHKPT_MDATA_FILE, (uint64_t)&md,
@@ -326,19 +332,27 @@ migrate_resume_entry_point:
 			reschedule();
 			ret = atomic_int32_read(&threads_to_resume);
 		}
-#if 0
-		create_kernel_task_on_core((tid_t *)&periodic_page_access_id,
-				periodic_page_access, NULL, NORMAL_PRIO, boot_processor);
-#endif
+
 		MIGLOG("Thread %u (%s): state restored, back to execution\n", task->id,
 				(task->id == primary_thread_id) ? "primary" : "secondary");
 
 		if(task->id == primary_thread_id)
 			mig_resuming = 0;
 
+		/* mig_resuming needs to be set to 0 for the next clone_task to
+		 * succeed */
+		__asm__ __volatile__ ("" ::: "memory");
+
+		unsigned int created_remote_mem_thread_id;
+		clone_task(&created_remote_mem_thread_id, periodic_page_access, NULL,
+				LOW_PRIO);
+		set_remote_mem_thread_id(created_remote_mem_thread_id);
+
 		/* Restore callee-saved registers or the full set of popcorn regs */
 #ifdef __aarch64__
+
 		// x19 -> x28 + frame pointer (x29) + link register (ret. addr, x30)
+		// FIXME this is old homogeneous migration stuff, remove
 		SET_X19(md.x19[task->id]);
 		SET_X20(md.x20[task->id]);
 		SET_X21(md.x21[task->id]);
@@ -388,8 +402,8 @@ migrate_resume_entry_point:
 			SET_X28(rs->x[28]);
 			SET_X29(rs->x[29]);
 			SET_X30(rs->x[30]);
-			SET_SP(rs->sp);
-			SET_PC_REG(rs->pc);
+	//		SET_SP(rs->sp);
+	//		SET_PC_REG(rs->pc);
 
 			SET_FRAME_AARCH64((*rs).x[29], (*rs).sp);
 			SET_PC_REG((*rs).pc);
@@ -397,6 +411,7 @@ migrate_resume_entry_point:
 			MIGERR("Should not reach here!\n");
 		}
 #else
+		/* FIXME: this is old homogeneous migration stuff, remove */
 		SET_R12(md.r12[task->id]);
 		SET_R13(md.r13[task->id]);
 		SET_R14(md.r14[task->id]);

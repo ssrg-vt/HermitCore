@@ -43,6 +43,7 @@
 #include <hermit/stack_slots.h>
 
 static int lwip_thread_id = -1;
+static int remote_mem_thread_id = -1;
 
 /*
  * Note that linker symbols are not variables, they have no memory allocated for
@@ -1002,9 +1003,14 @@ int get_task(tid_t id, task_t** task)
 	return 0;
 }
 
-/* Keep track of the id for LWIP thread (we do not want to migrate it) */
+/* Keep track of the id for LWIP thread / remote memory grabber thread (we do
+ * not want to migrate them) */
 void set_lwip_thread_id(int id) {
 	lwip_thread_id = id;
+}
+
+void set_remote_mem_thread_id(int id) {
+	remote_mem_thread_id = id;
 }
 
 /* Used for migration to get a list of migrated thread ids */
@@ -1019,7 +1025,8 @@ int get_tasks_ids(tid_t *array, int array_size) {
 	for(i=0; i<MAX_TASKS; i++) {
 		int status = task_table[i].status;
 		int id = task_table[i].id;
-		if((id != lwip_thread_id) && (id != array[0]) && (status == TASK_READY ||
+		if((id != lwip_thread_id) && (id != remote_mem_thread_id)  &&
+				(id != array[0]) && (status == TASK_READY ||
 					status == TASK_RUNNING || status == TASK_BLOCKED)) {
 			if(j < array_size)
 				array[j++] = task_table[i].id;
