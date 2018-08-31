@@ -3,9 +3,9 @@
 
 #ifdef __KERNEL__
 #include <hermit/stddef.h>
+#include <hermit/migration-x86-regs.h>
+#include <hermit/migration-aarch64-regs.h>
 #endif
-#include </home/mehrab/hermit-popcorn/x86_64-host/src/HermitCore/include/hermit/migration-x86-regs.h>
-#include </home/mehrab/hermit-popcorn/x86_64-host/src/HermitCore/include/hermit/migration-aarch64-regs.h>
 
 #define CHKPT_MDATA_FILE	"mdata.bin"
 #define CHKPT_STACK_FILE	"stack.bin"
