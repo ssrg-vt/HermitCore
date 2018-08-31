@@ -34,6 +34,7 @@
 })
 #endif
 
+/* The data structure we pass to uhyve when we ask for migration */
 typedef struct {
 	uint64_t heap_size;
 	uint64_t bss_size;
