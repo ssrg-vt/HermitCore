@@ -215,8 +215,12 @@ int check_pagetables(size_t vaddr)
 	return 1;
 }
 
+/* How much pages we bring at once from remote memory */
+#define BATCH_PAGES	16
+
 /* FIXME: we get some strange bug when the page fault hypercall parameter is
- * passed on the stack ... */
+ * passed on the stack ... Maybe the stack is too small, anyway the curent
+ * implementation is not thread safe! */
 uhyve_pfault_t pfault_hcall_arg;
 void page_fault_handler(struct state *s)
 {
@@ -230,19 +234,33 @@ void page_fault_handler(struct state *s)
 		size_t flags;
 		int ret;
 
+		/* When allocating in batch, do no go past the heap end */
+		int batch_pages = BATCH_PAGES;
+		while(viraddr + batch_pages*PAGE_SIZE > task->heap->end) batch_pages--;
+		if(!batch_pages) batch_pages = 1;
+
 		/*
 		 * do we have a valid page table entry? => flush TLB and return
 		 */
-		if (check_pagetables(viraddr)) {
-			//tlb_flush_one_page(viraddr, 0);
-			spinlock_irqsave_unlock(&page_lock);
-			return;
+		for(int i=0; i<batch_pages; i++) {
+			uint64_t addr = viraddr + i*PAGE_SIZE;
+			if (check_pagetables(addr)) {
+				if(addr == viraddr) {
+					//tlb_flush_one_page(addr, 0);
+					spinlock_irqsave_unlock(&page_lock);
+					return;
+				} else {
+					batch_pages = 1;
+					break;
+				}
+			}
 		}
 
 		 // on demand userspace heap mapping
 		viraddr &= PAGE_MASK;
 
-		size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
+		//size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
+		size_t phyaddr = get_pages(batch_pages);
 		if (BUILTIN_EXPECT(!phyaddr, 0)) {
 			LOG_ERROR("out of memory: task = %u\n", task->id);
 			goto default_handler;
@@ -251,7 +269,7 @@ void page_fault_handler(struct state *s)
 		flags = PG_USER|PG_RW;
 		if (has_nx()) // set no execution flag to protect the heap
 			flags |= PG_XD;
-		ret = __page_map(viraddr, phyaddr, 1, flags, 0);
+		ret = __page_map(viraddr, phyaddr, batch_pages, flags, 0);
 
 		if (BUILTIN_EXPECT(ret, 0)) {
 			LOG_ERROR("map_region: could not map %#lx to %#lx, task = %u\n", phyaddr, viraddr, task->id);
@@ -270,6 +288,7 @@ void page_fault_handler(struct state *s)
 			pfault_hcall_arg.vaddr = viraddr;
 			pfault_hcall_arg.paddr = phyaddr;
 			pfault_hcall_arg.type = PFAULT_HEAP;
+			pfault_hcall_arg.npages = batch_pages;
 			pfault_hcall_arg.success = 0;
 
 			uhyve_send(UHYVE_PORT_PFAULT,
