@@ -291,8 +291,13 @@ default_handler:
 	spinlock_irqsave_unlock(&page_lock);
 
 	/* Send page fault info to the host */
-	uhyve_pfault_t arg = {s->rip, viraddr, 0, PFAULT_FATAL, 0};
-	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
+	pfault_hcall_arg.rip = s->rip;
+	pfault_hcall_arg.paddr = 0;
+	pfault_hcall_arg.vaddr = viraddr;
+	pfault_hcall_arg.type = PFAULT_FATAL;
+	pfault_hcall_arg.success = 0;
+	uhyve_send(UHYVE_PORT_PFAULT,
+			(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
 
 	LOG_ERROR("Page Fault Exception (%d) on core %d at cs:ip = %#x:%#lx, fs = %#lx, gs = %#lx, rflags 0x%lx, task = %u, addr = %#lx, error = %#x [ %s %s %s %s %s ]\n",
 		s->int_no, CORE_ID, s->cs, s->rip, s->fs, s->gs, s->rflags, task->id, viraddr, s->error,
