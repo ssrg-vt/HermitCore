@@ -213,8 +213,6 @@ int check_pagetables(size_t vaddr) {
 	return 1;
 }
 
-#define BATCH_PAGES 16
-
 /* FIXME: we get some strange bug when the page fault hypercall parameter is
  * passed on the stack ... Maybe the interrupt stack is too small - the current
  * solution is not reentrent! */

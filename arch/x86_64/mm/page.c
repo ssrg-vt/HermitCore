@@ -215,9 +215,6 @@ int check_pagetables(size_t vaddr)
 	return 1;
 }
 
-/* How much pages we bring at once from remote memory */
-#define BATCH_PAGES	16
-
 /* FIXME: we get some strange bug when the page fault hypercall parameter is
  * passed on the stack ... Maybe the stack is too small, anyway the curent
  * implementation is not thread safe! */

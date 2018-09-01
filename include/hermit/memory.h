@@ -42,6 +42,9 @@ typedef enum {
        PFAULT_HEAP
 } pfault_type_t;
 
+/* How much pages we bring at once from remote memory */
+#define BATCH_PAGES	16
+
 typedef struct {
 	uint64_t rip;
 	uint64_t vaddr;
