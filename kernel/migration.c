@@ -12,6 +12,11 @@
 #include <hermit/stdio.h>
 #include <hermit/tasks.h>
 
+/* Set this to 1 and use the following env. variables to disable remote memory:
+ * HERMIT_MIGRATE_PORT=0 (source), HERMIT_MIGRATE_SERVER=0 (target), and don't
+ * forget to transfer the full checkpoint */
+#define REMOTE_SERVER_DISABLED 0
+
 #ifdef __aarch64__
 #include <hermit/migration-aarch64-regs.h>
 #else
@@ -149,6 +154,13 @@ static int restore_heap(uint64_t heap_start, uint64_t heap_size) {
 	/* We just write here info about the migrated heap, and will actually
 	* populate the content later (see page_fault_handler in mm/page.c */
 	curr_task->migrated_heap = heap_size;
+
+#if REMOTE_SERVER_DISABLED == 1
+	/* Good old checkpointed heap */
+	curr_task->migrated_heap = 0;
+	return migrate_restore_area_not_contiguous(CHKPT_HEAP_FILE,
+						curr_task->heap->start, heap_size);
+#endif
 
 	return 0;
 }
