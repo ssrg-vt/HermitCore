@@ -483,8 +483,11 @@ migrate_resume_entry_point:
 
 	md.heap_size = task->heap->end - task->heap->start;
 	md.heap_start = task->heap->start;
+
+#if REMOTE_SERVER_DISABLED == 1
 	if(checkpoint_heap())
 		return -1;
+#endif
 
 	/* Save .bss */
 	bss_size = (size_t) &kernel_start + image_size - (size_t) &__bss_start;
