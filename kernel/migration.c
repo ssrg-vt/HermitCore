@@ -242,9 +242,9 @@ int save_tls(uint64_t tls_size, int task_id) {
 	return 0;
 }
 
-/* A dedicated thread calls this function. This function reads the heap page by page.
- * If any page is absent, a page fault occures which retrives the page from the source
- * machine. It helps prefetching heap after migration.
+/* A dedicated thread calls this function. This function reads the heap page by
+ * page. If any page is absent, a page fault occures which retrives the page
+ * from the source machine. It helps prefetching heap after migration.
  */
 #define REMOTE_MEM_THREAD_DELAY_MS	200
 #define VALID_ADDRESSES_TO_TRY		16
@@ -371,6 +371,7 @@ migrate_resume_entry_point:
 #endif
 			mig_resuming = 0;
 
+#ifdef REMOTE_MEM_PULLING_THREAD
 		/* mig_resuming needs to be set to 0 for the next clone_task to
 		 * succeed */
 		__asm__ __volatile__ ("" ::: "memory");
@@ -379,6 +380,7 @@ migrate_resume_entry_point:
 		clone_task(&created_remote_mem_thread_id, periodic_page_access, NULL,
 				LOW_PRIO);
 		set_remote_mem_thread_id(created_remote_mem_thread_id);
+#endif
 
 		/* Restore callee-saved registers or the full set of popcorn regs */
 #ifdef __aarch64__

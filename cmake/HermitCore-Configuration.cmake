@@ -49,3 +49,5 @@ endif()
 
 option(KERNEL_DEBUG "Compile the kernel with -g and -O0"  OFF)
 option(MIGRATION_LOG "Enable migration events logging"  OFF)
+option(REMOTE_MEM_PULLING_THREAD "Spawn a background thread pulling remote
+	memory pages" OFF)
