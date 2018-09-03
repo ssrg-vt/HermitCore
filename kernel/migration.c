@@ -455,6 +455,10 @@ migrate_resume_entry_point:
 
 	task_t* task = per_core(current_task);
 	int is_main_task = (task->id == primary_thread_id) ? 1 : 0;
+
+	if(is_main_task)
+		uhyve_send(UHYVE_PORT_PRE_MIGRATE, 0x0);
+
 	MIGLOG("Thread %u (%s) entering checkpoint process\n", task->id,
 			is_main_task ? "primary" : "secondary" );
 
