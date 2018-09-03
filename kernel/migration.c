@@ -251,7 +251,8 @@ int save_tls(uint64_t tls_size, int task_id) {
 int periodic_page_access(void *arg)
 {
 	uint64_t i;
-	char j;
+	/* volatile so that the memory access does not get compiled out! */
+	volatile char j;
 	uint64_t start, stop;
 	int valid_addreses_found = 0;
 
