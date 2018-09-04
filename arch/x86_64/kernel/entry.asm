@@ -81,6 +81,8 @@ align 4
     global boot_gtod
     global forwarded_tls_size
     global node_id
+    global full_chkpt_save
+    global full_chkpt_restore
     base dq 0
     limit dq 0
     cpu_freq dd 0
@@ -117,6 +119,8 @@ align 4
     boot_gtod dq 0
     forwarded_tls_size dq 0
     node_id dd 0
+    full_chkpt_save dd 0
+    full_chkpt_restore dd 0
 
 ; Bootstrap page tables are used during the initialization.
 align 4096
