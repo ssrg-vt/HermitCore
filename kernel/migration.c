@@ -372,6 +372,9 @@ migrate_resume_entry_point:
 #endif
 			mig_resuming = 0;
 
+		/* Tell uhyve we are done with checkpoitn restoring */
+		uhyve_send(UHYVE_PORT_CHKPT_RESTORED, 0x0);
+
 #ifdef REMOTE_MEM_PULLING_THREAD
 		/* mig_resuming needs to be set to 0 for the next clone_task to
 		 * succeed */
