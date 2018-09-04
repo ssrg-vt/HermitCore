@@ -49,6 +49,7 @@
 /* Note that linker symbols are not variables, they have no memory
  * allocated for maintaining a value, rather their address is their value. */
 extern const void kernel_start;
+extern const void __bss_start;
 
 extern size_t l0_pgtable;
 
@@ -288,6 +289,52 @@ int page_fault_handler(size_t viraddr, size_t pc)
 			if(!pfault_hcall_arg.success)
 				goto default_handler;
 		}
+
+		spinlock_irqsave_unlock(&page_lock);
+		return 0;
+	}
+	else if ((viraddr >= (size_t) &__bss_start) && (viraddr < (size_t) &kernel_start + image_size)) {
+		/*
+		 * do we have a valid page table entry? => flush TLB and return
+		 */
+		if (check_pagetables(viraddr)) {
+			tlb_flush_one_page(viraddr);
+			spinlock_irqsave_unlock(&page_lock);
+			return 0;
+		}
+
+		 // on demand userspace heap mapping
+		viraddr &= PAGE_MASK;
+
+		size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
+		if (BUILTIN_EXPECT(!phyaddr, 0)) {
+			LOG_ERROR("out of memory: task = %u\n", task->id);
+			goto default_handler;
+		}
+
+		size_t flags = PG_USER|PG_RW;
+		int ret = __page_map(viraddr, phyaddr, 1, flags);
+
+		if (BUILTIN_EXPECT(ret, 0)) {
+			LOG_ERROR("map_region: could not map %#lx to %#lx, task = %u\n", phyaddr, viraddr, task->id);
+			put_page(phyaddr);
+
+			goto default_handler;
+		}
+
+		/* Call uhyve to populate the page */
+		pfault_hcall_arg.rip = pc;
+		pfault_hcall_arg.paddr = phyaddr;
+		pfault_hcall_arg.vaddr = viraddr;
+		pfault_hcall_arg.type = PFAULT_BSS;
+		pfault_hcall_arg.npages = 1;
+		pfault_hcall_arg.success = 0;
+
+		uhyve_send(UHYVE_PORT_PFAULT,
+				(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
+
+		if(!pfault_hcall_arg.success)
+			goto default_handler;
 
 		spinlock_irqsave_unlock(&page_lock);
 		return 0;

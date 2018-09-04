@@ -39,7 +39,8 @@
 /* Popcorn datastructures for on demand memory transfer */
 typedef enum {
        PFAULT_FATAL = 0,
-       PFAULT_HEAP
+       PFAULT_HEAP,
+       PFAULT_BSS
 } pfault_type_t;
 
 /* How much pages we bring at once from remote memory */
