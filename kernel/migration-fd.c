@@ -128,7 +128,7 @@ int migrate_restore_fds(const char *filename) {
 
 int migrate_chkpt_fds(const char *filename) {
 	int i, fd;
-	
+
 	fd = sys_open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 	if(fd == -1) {
 		MIGERR("Cannot open file for fd migration\n");
@@ -149,7 +149,7 @@ int migrate_chkpt_fds(const char *filename) {
 			}
 			ptr->offset = offset;
 
-			if(sys_write(fd, (char *)ptr, sizeof(migration_fd_t)) != 
+			if(sys_write(fd, (char *)ptr, sizeof(migration_fd_t)) !=
 				sizeof(migration_fd_t)) {
 				MIGERR("Saving fd array: short write\n");
 				sys_close(fd);
