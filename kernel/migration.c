@@ -12,11 +12,6 @@
 #include <hermit/stdio.h>
 #include <hermit/tasks.h>
 
-/* Set this to 1 and use the following env. variables to disable remote memory:
- * HERMIT_MIGRATE_PORT=0 (source), HERMIT_MIGRATE_SERVER=0 (target), and don't
- * forget to transfer the full checkpoint */
-#define REMOTE_SERVER_DISABLED 0
-
 #ifdef __aarch64__
 #include <hermit/migration-aarch64-regs.h>
 #else
@@ -56,6 +51,10 @@ extern const void kernel_start;
 extern const void __bss_start;
 extern const void __data_start;
 extern const void __data_end;
+
+/* Are we doing a full checkpoint or ODP */
+extern uint32_t full_chkpt_save;
+extern uint32_t full_chkpt_restore;
 
 /* Main Core on which we put the background thread pulling remote pages  */
 extern uint32_t boot_processor;
@@ -106,6 +105,8 @@ static int restore_data(uint64_t data_size) {
 	MIGLOG("Restore data from 0x%llx, size 0x%llx\n", (size_t)&__data_start,
 			data_size);
 
+	/* TODO: on-demand migration */
+
 	return migrate_restore_area(CHKPT_DATA_FILE, (size_t)&__data_start,
 		data_size);
 }
@@ -114,10 +115,13 @@ static int restore_bss(uint64_t bss_size) {
 	MIGLOG("Restore bss from 0x%llx, size 0x%llx\n", (size_t)&__bss_start,
 			bss_size);
 
-#if REMOTE_SERVER_DISABLED == 1
-	return migrate_restore_area(CHKPT_BSS_FILE, (size_t)&__bss_start, bss_size);
-#endif
-	return 0;
+	/* TODO: on-demand migration */
+	if(full_chkpt_restore)
+		return migrate_restore_area(CHKPT_BSS_FILE, (size_t)&__bss_start, bss_size);
+	else {
+		page_unmap((size_t)&__bss_start, (size_t)(bss_size/PAGE_SIZE));
+		return 0;
+	}
 }
 
 static int restore_heap(uint64_t heap_start, uint64_t heap_size) {
@@ -154,16 +158,14 @@ static int restore_heap(uint64_t heap_start, uint64_t heap_size) {
 		return -1;
 	}
 
-	/* We just write here info about the migrated heap, and will actually
-	* populate the content later (see page_fault_handler in mm/page.c */
-	curr_task->migrated_heap = heap_size;
-
-#if REMOTE_SERVER_DISABLED == 1
-	/* Good old checkpointed heap */
-	curr_task->migrated_heap = 0;
-	return migrate_restore_area_not_contiguous(CHKPT_HEAP_FILE,
-						curr_task->heap->start, heap_size);
-#endif
+	/* Fully restore the heap if we are doing checkpoint restart, otherwise it
+	 * will be brought on demand later */
+	if(full_chkpt_restore) {
+		curr_task->migrated_heap = 0;
+		return migrate_restore_area_not_contiguous(CHKPT_HEAP_FILE,
+							curr_task->heap->start, heap_size);
+	} else
+		curr_task->migrated_heap = heap_size;
 
 	return 0;
 }
@@ -375,15 +377,20 @@ migrate_resume_entry_point:
 #endif
 			mig_resuming = 0;
 
-#ifdef REMOTE_MEM_PULLING_THREAD
-		/* mig_resuming needs to be set to 0 for the next clone_task to
-		 * succeed */
-		__asm__ __volatile__ ("" ::: "memory");
+		/* Tell uhyve we are done with checkpoitn restoring */
+		uhyve_send(UHYVE_PORT_CHKPT_RESTORED, 0x0);
 
-		unsigned int created_remote_mem_thread_id;
-		clone_task(&created_remote_mem_thread_id, periodic_page_access, NULL,
-				LOW_PRIO);
-		set_remote_mem_thread_id(created_remote_mem_thread_id);
+#ifdef REMOTE_MEM_PULLING_THREAD
+		if(!full_chkpt_restore) {
+			/* mig_resuming needs to be set to 0 for the next clone_task to
+			 * succeed */
+			__asm__ __volatile__ ("" ::: "memory");
+
+			unsigned int created_remote_mem_thread_id;
+			clone_task(&created_remote_mem_thread_id, periodic_page_access,
+					NULL, LOW_PRIO);
+			set_remote_mem_thread_id(created_remote_mem_thread_id);
+		}
 #endif
 
 		/* Restore callee-saved registers or the full set of popcorn regs */
@@ -494,10 +501,9 @@ migrate_resume_entry_point:
 	md.heap_size = task->heap->end - task->heap->start;
 	md.heap_start = task->heap->start;
 
-#if REMOTE_SERVER_DISABLED == 1
-	if(checkpoint_heap())
-		return -1;
-#endif
+	if(full_chkpt_save)
+		if(checkpoint_heap())
+			return -1;
 
 	/* Save .bss */
 	bss_size = (size_t) &kernel_start + image_size - (size_t) &__bss_start;
