@@ -137,6 +137,10 @@ forwarded_tls_size: .quad 0
 uart_mmio: .xword 0
 .global node_id
 node_id: .xword 0
+.global full_chkpt_save
+full_chkpt_save: .xword 0
+.global full_chkpt_restore
+full_chkpt_restore: .xword 0
 
 start64:
   //mrs x0, s3_1_c15_c3_0 // Read EL1 Configuration Base Address Register

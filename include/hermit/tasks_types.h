@@ -95,6 +95,12 @@ typedef struct task {
 	uint64_t		last_tsc;
 	/// the userspace heap
 	vma_t*			heap;
+	/// Popcorn migrated part of the heap: the first access to somewhere in the
+	/// heap will page fault. If the access is located between the start of the
+	/// heap and migrated_heap, it means we have to fetch the memory from the
+	/// remote sever. If the access is past migrated_heap, then it means we just
+	/// have to map the page
+	uint64_t migrated_heap;
 	/// parent thread
 	tid_t			parent;
 	/// next task in the queue

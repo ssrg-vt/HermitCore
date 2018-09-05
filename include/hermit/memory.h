@@ -36,6 +36,24 @@
 #ifndef __MEMORY_H__
 #define __MEMORY_H__
 
+/* Popcorn datastructures for on demand memory transfer */
+typedef enum {
+       PFAULT_FATAL = 0,
+       PFAULT_HEAP
+} pfault_type_t;
+
+/* How much pages we bring at once from remote memory */
+#define BATCH_PAGES	16
+
+typedef struct {
+	uint64_t rip;
+	uint64_t vaddr;
+	uint64_t paddr;
+	pfault_type_t type;
+	uint8_t npages;
+	uint8_t success;
+} __attribute__ ((packed)) uhyve_pfault_t;
+
 /** @brief Initialize the memory subsystem */
 int memory_init(void);
 

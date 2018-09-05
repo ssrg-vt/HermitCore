@@ -43,6 +43,7 @@
 #include <hermit/stack_slots.h>
 
 static int lwip_thread_id = -1;
+static int remote_mem_thread_id = -1;
 
 /*
  * Note that linker symbols are not variables, they have no memory allocated for
@@ -63,9 +64,8 @@ extern uint32_t mig_resuming;
  * A task's id will be its position in this array.
  */
 static task_t task_table[MAX_TASKS] = { \
-        [0]                 = {0, TASK_IDLE, 0, NULL, NULL, NULL, TASK_DEFAULT_FLAGS, 0, 0, 0, 0, NULL, 0, NULL, NULL, 0, 0, 0, NULL, FPU_STATE_INIT}, \
-        [1 ... MAX_TASKS-1] = {0, TASK_INVALID, 0, NULL, NULL, NULL, TASK_DEFAULT_FLAGS, 0, 0, 0, 0, NULL, 0, NULL, NULL, 0, 0, 0, NULL, FPU_STATE_INIT}};
-
+         [0]                 = {0, TASK_IDLE, 0, NULL, NULL, NULL, TASK_DEFAULT_FLAGS, 0, 0, 0, 0, NULL, 0, 0, NULL, NULL, 0, 0, 0, NULL, FPU_STATE_INIT}, \
+         [1 ... MAX_TASKS-1] = {0, TASK_INVALID, 0, NULL, NULL, NULL, TASK_DEFAULT_FLAGS, 0, 0, 0, 0, NULL, 0, 0, NULL, NULL, 0, 0, 0, NULL, FPU_STATE_INIT}};
 static spinlock_irqsave_t table_lock = SPINLOCK_IRQSAVE_INIT;
 
 #if MAX_CORES > 1
@@ -320,6 +320,7 @@ tid_t set_idle_task(void)
 			task_table[i].ist_addr = NULL;
 			task_table[i].prio = IDLE_PRIO;
 			task_table[i].heap = NULL;
+			task_table[i].migrated_heap = 0x0;
 			readyqueues[core_id].idle = task_table+i;
 			set_per_core(current_task, readyqueues[core_id].idle);
 
@@ -352,10 +353,11 @@ void finish_task_switch(void)
 				old->stack = NULL;
 			}
 
-			if (!old->parent && old->heap) {
-				kfree(old->heap);
-				old->heap = NULL;
-			}
+		   if (!old->parent)
+				if(old->heap) {
+					kfree(old->heap);
+					old->heap = NULL;
+				}
 
 			if (old->ist_addr) {
 				destroy_stack(old->ist_addr, KERNEL_STACK_SIZE);
@@ -508,6 +510,7 @@ int clone_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio)
 	task_table[i].stack = stack;
 	task_table[i].prio = prio;
 	task_table[i].heap = curr_task->heap;
+	task_table[i].migrated_heap = curr_task->migrated_heap;
 	task_table[i].start_tick = get_clock_tick();
 	task_table[i].last_tsc = 0;
 	task_table[i].parent = curr_task->id;
@@ -635,6 +638,7 @@ int create_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio, uint32_t c
 			task_table[i].stack = stack;
 			task_table[i].prio = prio;
 			task_table[i].heap = NULL;
+			task_table[i].migrated_heap = 0x0;
 			task_table[i].start_tick = get_clock_tick();
 			task_table[i].last_tsc = 0;
 			task_table[i].parent = 0;
@@ -999,9 +1003,14 @@ int get_task(tid_t id, task_t** task)
 	return 0;
 }
 
-/* Keep track of the id for LWIP thread (we do not want to migrate it) */
+/* Keep track of the id for LWIP thread / remote memory grabber thread (we do
+ * not want to migrate them) */
 void set_lwip_thread_id(int id) {
 	lwip_thread_id = id;
+}
+
+void set_remote_mem_thread_id(int id) {
+	remote_mem_thread_id = id;
 }
 
 /* Used for migration to get a list of migrated thread ids */
@@ -1016,7 +1025,8 @@ int get_tasks_ids(tid_t *array, int array_size) {
 	for(i=0; i<MAX_TASKS; i++) {
 		int status = task_table[i].status;
 		int id = task_table[i].id;
-		if((id != lwip_thread_id) && (id != array[0]) && (status == TASK_READY ||
+		if((id != lwip_thread_id) && (id != remote_mem_thread_id)  &&
+				(id != array[0]) && (status == TASK_READY ||
 					status == TASK_RUNNING || status == TASK_BLOCKED)) {
 			if(j < array_size)
 				array[j++] = task_table[i].id;

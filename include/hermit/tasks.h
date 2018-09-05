@@ -49,6 +49,7 @@ int get_tasks_ids(tid_t *array, int array_size);
 
 /* Keep track of lwip thread id */
 void set_lwip_thread_id(int id);
+void set_remote_mem_thread_id(int id);
 
 /** @brief System call to terminate a user level process */
 void NORETURN sys_exit(int);

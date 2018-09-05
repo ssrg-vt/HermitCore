@@ -46,12 +46,6 @@
 #include <asm/page.h>
 #include <asm/uhyve.h>
 
-typedef struct {
-	uint64_t rip;
-	uint64_t addr;
-	int success;
-} __attribute__ ((packed)) uhyve_pfault_t;
-
 /* Note that linker symbols are not variables, they have no memory
  * allocated for maintaining a value, rather their address is their value. */
 extern const void kernel_start;
@@ -219,7 +213,10 @@ int check_pagetables(size_t vaddr) {
 	return 1;
 }
 
-
+/* FIXME: we get some strange bug when the page fault hypercall parameter is
+ * passed on the stack ... Maybe the interrupt stack is too small - the current
+ * solution is not reentrent! */
+uhyve_pfault_t pfault_hcall_arg;
 int page_fault_handler(size_t viraddr, size_t pc)
 {
 	task_t* task = per_core(current_task);
@@ -229,26 +226,41 @@ int page_fault_handler(size_t viraddr, size_t pc)
 	//page_dump();
 
 	if ((task->heap) && (viraddr >= task->heap->start) && (viraddr < task->heap->end)) {
+
+		/* When allocating in batch, do no go past the heap end */
+		int batch_pages = BATCH_PAGES;
+		while(viraddr + batch_pages*PAGE_SIZE > task->heap->end) batch_pages--;
+		if(!batch_pages) batch_pages = 1;
+
 		/*
 		 * do we have a valid page table entry? => flush TLB and return
 		 */
-		if (check_pagetables(viraddr)) {
-			tlb_flush_one_page(viraddr);
-			spinlock_irqsave_unlock(&page_lock);
-			return 0;
+		for(int i=0; i<batch_pages; i++) {
+			uint64_t addr = viraddr + i*PAGE_SIZE;
+			if (check_pagetables(addr)) {
+				if(addr == viraddr) {
+					tlb_flush_one_page(addr);
+					spinlock_irqsave_unlock(&page_lock);
+					return 0;
+				} else {
+					batch_pages = 1;
+					break;
+				}
+			}
 		}
 
 		 // on demand userspace heap mapping
 		viraddr &= PAGE_MASK;
 
-		size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
+		//size_t phyaddr = expect_zeroed_pages ? get_zeroed_pages(batch_pages) : get_pages(batch_pages);
+		size_t phyaddr = get_pages(batch_pages);
 		if (BUILTIN_EXPECT(!phyaddr, 0)) {
 			LOG_ERROR("out of memory: task = %u\n", task->id);
 			goto default_handler;
 		}
 
 		size_t flags = PG_USER|PG_RW;
-		int ret = __page_map(viraddr, phyaddr, 1, flags);
+		int ret = __page_map(viraddr, phyaddr, batch_pages, flags);
 
 		if (BUILTIN_EXPECT(ret, 0)) {
 			LOG_ERROR("map_region: could not map %#lx to %#lx, task = %u\n", phyaddr, viraddr, task->id);
@@ -257,8 +269,27 @@ int page_fault_handler(size_t viraddr, size_t pc)
 			goto default_handler;
 		}
 
-		spinlock_irqsave_unlock(&page_lock);
 
+		/* On-demand heap migration: populate the page */
+		if(task->migrated_heap &&
+				viraddr < (task->heap->start + task->migrated_heap)) {
+
+				/* Call uhyve to populate the page */
+			pfault_hcall_arg.rip = pc;
+			pfault_hcall_arg.paddr = phyaddr;
+			pfault_hcall_arg.vaddr = viraddr;
+			pfault_hcall_arg.type = PFAULT_HEAP;
+			pfault_hcall_arg.npages = batch_pages;
+			pfault_hcall_arg.success = 0;
+
+			uhyve_send(UHYVE_PORT_PFAULT,
+					(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
+
+			if(!pfault_hcall_arg.success)
+				goto default_handler;
+		}
+
+		spinlock_irqsave_unlock(&page_lock);
 		return 0;
 	}
 
@@ -266,8 +297,13 @@ default_handler:
 	spinlock_irqsave_unlock(&page_lock);
 
 	/* indicate unrecoverable page fault to the hypervisor */
-	uhyve_pfault_t arg = {pc, viraddr, -1};
-	uhyve_send(UHYVE_PORT_PFAULT, (unsigned)virt_to_phys((size_t)&arg));
+	pfault_hcall_arg.rip = pc;
+	pfault_hcall_arg.paddr = 0;
+	pfault_hcall_arg.vaddr = viraddr;
+	pfault_hcall_arg.type = PFAULT_FATAL;
+	pfault_hcall_arg.success = 0;
+	uhyve_send(UHYVE_PORT_PFAULT,
+			(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
 
 	return -EINVAL;
 }

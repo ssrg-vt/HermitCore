@@ -20,7 +20,7 @@ set(DEFAULT_STACK_SIZE 1048576 CACHE STRING
 	"Task stack size in bytes")
 
 set(MAX_ARGC_ENVC 128 CACHE STRING
-	"Maximum number of command line parameters and enviroment variables
+	"Maximum number of command line parameters and enviroment variables \
 	forwarded to uhyve")
 
 option(DYNAMIC_TICKS
@@ -49,3 +49,5 @@ endif()
 
 option(KERNEL_DEBUG "Compile the kernel with -g and -O0"  OFF)
 option(MIGRATION_LOG "Enable migration events logging"  OFF)
+option(REMOTE_MEM_PULLING_THREAD "Spawn a background thread pulling remote \
+	memory pages" ON)

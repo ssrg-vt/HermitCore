@@ -34,6 +34,12 @@
 })
 #endif
 
+/* The data structure we pass to uhyve when we ask for migration */
+typedef struct {
+	uint64_t heap_size;
+	uint64_t bss_size;
+} __attribute__ ((packed)) uhyve_migration_t;
+
 /* atomic variable set to 1 when application should migrate */
 extern atomic_int32_t should_migrate;
 
@@ -45,6 +51,13 @@ extern const void kernel_start;
 extern const void __bss_start;
 extern const void __data_start;
 extern const void __data_end;
+
+/* Are we doing a full checkpoint or ODP */
+extern uint32_t full_chkpt_save;
+extern uint32_t full_chkpt_restore;
+
+/* Main Core on which we put the background thread pulling remote pages  */
+extern uint32_t boot_processor;
 
 /* Keep track of the number of threads running. When a thread enters the
  * migration code, there is a barrier waiting for all running threads to reach
@@ -92,6 +105,8 @@ static int restore_data(uint64_t data_size) {
 	MIGLOG("Restore data from 0x%llx, size 0x%llx\n", (size_t)&__data_start,
 			data_size);
 
+	/* TODO: on-demand migration */
+
 	return migrate_restore_area(CHKPT_DATA_FILE, (size_t)&__data_start,
 		data_size);
 }
@@ -100,13 +115,14 @@ static int restore_bss(uint64_t bss_size) {
 	MIGLOG("Restore bss from 0x%llx, size 0x%llx\n", (size_t)&__bss_start,
 			bss_size);
 
+	/* TODO: on-demand migration */
+
 	return migrate_restore_area(CHKPT_BSS_FILE, (size_t)&__bss_start, bss_size);
 }
 
-static int restore_heap(uint64_t heap_size) {
+static int restore_heap(uint64_t heap_start, uint64_t heap_size) {
 	size_t heap = HEAP_START;
 	task_t* curr_task = per_core(current_task);
-	uint64_t i;
 
 	if (!curr_task->heap)
 		curr_task->heap = (vma_t*) kmalloc(sizeof(vma_t));
@@ -120,6 +136,13 @@ static int restore_heap(uint64_t heap_size) {
 	curr_task->heap->start = PAGE_CEIL(heap);
 	curr_task->heap->end = PAGE_CEIL(heap);
 
+	/* Check that the heap is located at the same address as previously */
+	if(curr_task->heap->start != heap_start) {
+		MIGERR("Heap starts at 0x%x but was previously located at 0x%x\n",
+                                curr_task->heap->start, heap_start);
+		return -EINVAL;
+	}
+
 	// region is already reserved for the heap, we have to change the
 	// property of the first page
 	vma_free(curr_task->heap->start, curr_task->heap->start+PAGE_SIZE);
@@ -130,15 +153,17 @@ static int restore_heap(uint64_t heap_size) {
 		MIGERR("Cannot reallocate heap, out of memory\n");
 		return -1;
 	}
-	/* Heap is mapped on demand, touch the first byte of each page */
-	for(i=curr_task->heap->start; i<curr_task->heap->end; i+= PAGE_SIZE)
-		memset((void *)i, 0x0, 0x1);
 
-	MIGLOG("Restore heap from 0x%llx, size 0x%llx\n", curr_task->heap->start,
-			heap_size);
+	/* Fully restore the heap if we are doing checkpoint restart, otherwise it
+	 * will be brought on demand later */
+	if(full_chkpt_restore) {
+		curr_task->migrated_heap = 0;
+		return migrate_restore_area_not_contiguous(CHKPT_HEAP_FILE,
+							curr_task->heap->start, heap_size);
+	} else
+		curr_task->migrated_heap = heap_size;
 
-	return migrate_restore_area_not_contiguous(CHKPT_HEAP_FILE,
-			curr_task->heap->start, heap_size);
+	return 0;
 }
 
 int checkpoint_heap(void) {
@@ -218,6 +243,49 @@ int save_tls(uint64_t tls_size, int task_id) {
 	return 0;
 }
 
+/* A dedicated thread calls this function. This function reads the heap page by
+ * page. If any page is absent, a page fault occures which retrives the page
+ * from the source machine. It helps prefetching heap after migration.
+ */
+#define REMOTE_MEM_THREAD_DELAY_MS	200
+#define VALID_ADDRESSES_TO_TRY		16
+int periodic_page_access(void *arg)
+{
+	uint64_t i;
+	/* volatile so that the memory access does not get compiled out! */
+	volatile char j;
+	uint64_t start, stop;
+	int valid_addreses_found = 0;
+
+	MIGLOG("Remote memory thread starts\n");
+	task_t *task = per_core(current_task);
+
+	/* The main task uses clone_task to create this thread, thus it inheritates
+	 * info about the heap */
+	start = task->heap->start;
+	stop = start + task->migrated_heap;
+
+	/* First check the page tables to see if the page is not already there. If
+	 * it is, check the next one, up to VALID_ADDRESSES_TO_TRY pages per
+	 * iteration */
+	for(i = start; i<stop; i += PAGE_SIZE) {
+		// MIGLOG("periodic: request 0x%llx\n", i);
+		if(check_pagetables(i)) {
+			if(++valid_addreses_found == VALID_ADDRESSES_TO_TRY) {
+				goto rmem_sleep;
+			} else { continue; }}
+
+		j = *((char *)i);
+
+rmem_sleep:
+		valid_addreses_found = 0;
+		sys_msleep(REMOTE_MEM_THREAD_DELAY_MS);
+	}
+
+	MIGLOG("Remote memory thread done\n");
+	return 0;
+}
+
 /* Returns -1 if migration attemp failed (on the source), 0 if we are back from
  * successful migration on the target, -2 if something went wrong during state
  * restoration on target
@@ -244,6 +312,7 @@ migrate_resume_entry_point:
 			 * somewhere */
 			set_primary_thread_id(task->id);
 			primary_flag = 0;
+			primary_thread_id = task->id;
 
 			/* get metadata */
 			if(migrate_restore_area(CHKPT_MDATA_FILE, (uint64_t)&md,
@@ -261,7 +330,7 @@ migrate_resume_entry_point:
 				return -2;
 			}
 
-			if(restore_heap(md.heap_size)) {
+			if(restore_heap(md.heap_start, md.heap_size)) {
 				MIGERR("Cannot restore heap after migration\n");
 				return -2;
 			}
@@ -303,6 +372,22 @@ migrate_resume_entry_point:
 		if(task->id == primary_thread_id)
 #endif
 			mig_resuming = 0;
+
+		/* Tell uhyve we are done with checkpoitn restoring */
+		uhyve_send(UHYVE_PORT_CHKPT_RESTORED, 0x0);
+
+#ifdef REMOTE_MEM_PULLING_THREAD
+		if(!full_chkpt_restore) {
+			/* mig_resuming needs to be set to 0 for the next clone_task to
+			 * succeed */
+			__asm__ __volatile__ ("" ::: "memory");
+
+			unsigned int created_remote_mem_thread_id;
+			clone_task(&created_remote_mem_thread_id, periodic_page_access,
+					NULL, LOW_PRIO);
+			set_remote_mem_thread_id(created_remote_mem_thread_id);
+		}
+#endif
 
 		/* Restore callee-saved registers or the full set of popcorn regs */
 #ifdef __aarch64__
@@ -370,11 +455,16 @@ migrate_resume_entry_point:
 		}
 #endif
 
+
 		return 0;
 	}
 
 	task_t* task = per_core(current_task);
 	int is_main_task = (task->id == primary_thread_id) ? 1 : 0;
+
+	if(is_main_task)
+		uhyve_send(UHYVE_PORT_PRE_MIGRATE, 0x0);
+
 	MIGLOG("Thread %u (%s) entering checkpoint process\n", task->id,
 			is_main_task ? "primary" : "secondary" );
 
@@ -404,10 +494,12 @@ migrate_resume_entry_point:
 	uint32_t sec_threads_barrier;
 #endif
 
-	/* Save heap */
 	md.heap_size = task->heap->end - task->heap->start;
-	if(checkpoint_heap())
-		return -1;
+	md.heap_start = task->heap->start;
+
+	if(full_chkpt_save)
+		if(checkpoint_heap())
+			return -1;
 
 	/* Save .bss */
 	bss_size = (size_t) &kernel_start + image_size - (size_t) &__bss_start;
@@ -502,7 +594,8 @@ migrate_resume_entry_point:
 
 	/* Finally the main task sends the migration signal to uhyve */
 	MIGLOG("Thread %d (primary) done with migration\n", task->id);
-	uhyve_send(UHYVE_PORT_MIGRATE, 0);
+	uhyve_migration_t arg = {md.heap_size, md.bss_size};
+	uhyve_send(UHYVE_PORT_MIGRATE, (unsigned)virt_to_phys((size_t)&arg));
 
 	/* Should never reach here */
 	MIGERR("Migration - source: should not reach that point\n");
