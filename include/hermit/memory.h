@@ -53,6 +53,7 @@ typedef struct {
 	pfault_type_t type;
 	uint8_t npages;
 	uint8_t success;
+	uint32_t page_size;
 } __attribute__ ((packed)) uhyve_pfault_t;
 
 /** @brief Initialize the memory subsystem */

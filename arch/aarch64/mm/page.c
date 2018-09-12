@@ -282,6 +282,7 @@ int page_fault_handler(size_t viraddr, size_t pc)
 			pfault_hcall_arg.type = PFAULT_HEAP;
 			pfault_hcall_arg.npages = batch_pages;
 			pfault_hcall_arg.success = 0;
+			pfault_hcall_arg.page_size = PAGE_SIZE;
 
 			uhyve_send(UHYVE_PORT_PFAULT,
 					(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
@@ -303,7 +304,7 @@ int page_fault_handler(size_t viraddr, size_t pc)
 			return 0;
 		}
 
-		 // on demand userspace heap mapping
+		 // on demand userspace bss mapping
 		viraddr &= PAGE_MASK;
 
 		size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
@@ -329,6 +330,7 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		pfault_hcall_arg.type = PFAULT_BSS;
 		pfault_hcall_arg.npages = 1;
 		pfault_hcall_arg.success = 0;
+		pfault_hcall_arg.page_size = PAGE_SIZE;
 
 		uhyve_send(UHYVE_PORT_PFAULT,
 				(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));

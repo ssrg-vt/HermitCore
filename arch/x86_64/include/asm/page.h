@@ -44,8 +44,11 @@
 /// Page offset bits
 #define PAGE_BITS		12
 #define PAGE_2M_BITS		21
+#define HUGE_PAGE_BITS		21
 /// The size of a single page in bytes
 #define PAGE_SIZE		( 1L << PAGE_BITS)
+#define PAGE_2M_SIZE		(1UL << PAGE_2M_BITS)
+#define HUGE_PAGE_SIZE		(1UL << HUGE_PAGE_BITS)
 /// Mask the page address without page map flags and XD flag
 #if 0
 #define PAGE_MASK		((~0UL) << PAGE_BITS)
@@ -53,6 +56,7 @@
 #else
 #define PAGE_MASK		(((~0UL) << PAGE_BITS) & ~PG_XD)
 #define PAGE_2M_MASK		(((~0UL) << PAGE_2M_BITS) & ~PG_XD)
+#define HUGE_PAGE_MASK		(((~0UL) << HUGE_PAGE_BITS) & ~PG_XD)
 #endif
 
 #if 0
@@ -109,7 +113,11 @@ static inline size_t sign_extend(ssize_t addr, int bits)
 /// Align to next 2M boundary
 #define PAGE_2M_CEIL(addr)	(((addr) + (1L << 21) - 1) & ((~0L) << 21))
 /// Align to next 2M boundary
+#define HUGE_PAGE_CEIL(addr)	(((addr) + HUGE_PAGE_SIZE - 1) & ((~0UL) << HUGE_PAGE_BITS))
+/// Align to next 2M boundary
 #define PAGE_2M_FLOOR(addr)	( (addr)                   & ((~0L) << 21))
+/// Align to nex huge page boundary
+#define HUGE_PAGE_FLOOR(addr)	( (addr)                  & ((~0UL) << HUGE_PAGE_BITS))
 /// Align end of the kernel
 #define KERNEL_END_CEIL(addr)   (PAGE_2M_CEIL((addr)))
 
@@ -202,6 +210,7 @@ static inline int page_map(size_t viraddr, size_t phyaddr, size_t npages, size_t
  * @return
  */
 int page_unmap(size_t viraddr, size_t npages);
+int page_unmap_2m(size_t viraddr);
 
 /** @brief Change the page permission in the page tables of the current task
  *

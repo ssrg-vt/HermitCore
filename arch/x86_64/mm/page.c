@@ -169,6 +169,93 @@ out:
 	return ret;
 }
 
+int __page_map_2m(size_t viraddr, size_t phyaddr, size_t npages, size_t bits, uint8_t do_ipi)
+{
+	ssize_t vpn = viraddr >> PAGE_BITS;
+	ssize_t first[PAGE_LEVELS] = {[0 ... PAGE_LEVELS-1] = 0};
+	ssize_t last[PAGE_LEVELS] = {[0 ... PAGE_LEVELS-1] = 0};
+	size_t page_size = PAGE_SIZE;
+	size_t page_bits = PAGE_BITS;
+	int32_t offset = 0;
+	int ret = -ENOMEM;
+	int8_t send_ipi = 0;
+
+	//kprintf("Map %d pages at 0x%zx (0x%zx)\n", npages, viraddr, phyaddr);
+
+	if ((HUGE_PAGE_SIZE != PAGE_SIZE) && !(viraddr & (HUGE_PAGE_SIZE-1))
+	   && !(phyaddr & (HUGE_PAGE_SIZE-1))
+	   && (npages == HUGE_PAGE_SIZE/PAGE_SIZE)) {
+		LOG_DEBUG("Map huge page...\n");
+
+		npages = 1;
+		page_size = HUGE_PAGE_SIZE;
+		page_bits = HUGE_PAGE_BITS;
+
+		if (HUGE_PAGE_SIZE == PAGE_2M_SIZE)
+			offset = 1;
+		else // => 1GB pages
+			offset = 2;
+	}
+
+	/* Calculate index boundaries for page map traversal */
+	for (int32_t lvl=offset; lvl<PAGE_LEVELS; lvl++) {
+		first[lvl] = (vpn         ) >> (lvl * PAGE_MAP_BITS);
+		last[lvl]  = (vpn+npages-1) >> (lvl * PAGE_MAP_BITS);
+	}
+
+	spinlock_irqsave_lock(&page_lock);
+
+	/* Start iterating through the entries
+	 * beginning at the root table (PGD or PML4) */
+	for (int32_t lvl=PAGE_LEVELS-1; lvl>=offset; lvl--) {
+		for (vpn=first[lvl]; vpn<=last[lvl]; vpn++) {
+			if (lvl != offset) { /* PML4, PDPT, PGD */
+				if (!(self[lvl][vpn] & PG_PRESENT)) {
+					/* There's no table available which covers the region.
+					 * Therefore we need to create a new empty table. */
+					size_t paddr = get_pages(1);
+					if (BUILTIN_EXPECT(!paddr, 0))
+						goto out;
+
+					/* Reference the new table within its parent */
+					self[lvl][vpn] = (paddr | bits | PG_PRESENT | PG_USER | PG_RW | PG_ACCESSED | PG_DIRTY) & ~PG_XD;
+
+					/* Fill new table with zeros */
+					memset(&self[lvl-1][vpn<<PAGE_MAP_BITS], 0, PAGE_SIZE);
+				}
+			} else { /* last level page table */
+				int8_t flush = 0;
+
+				/* do we have to flush the TLB? */
+				if (self[lvl][vpn] & PG_PRESENT) {
+					//kprintf("Remap address 0x%zx at core %d\n", viraddr, CORE_ID);
+					send_ipi = flush = 1;
+				}
+
+				self[lvl][vpn] = phyaddr | bits | PG_PRESENT | PG_ACCESSED | PG_DIRTY;
+
+				// Do we map a huge page?
+				if (offset)
+					self[lvl][vpn] = self[lvl][vpn] | PG_PSE;
+
+				if (flush)
+					tlb_flush_one_page(vpn << page_bits, 0);
+
+				phyaddr += page_size;
+			}
+		}
+	}
+
+	if (do_ipi && send_ipi)
+		ipi_tlb_flush();
+
+	ret = 0;
+out:
+	spinlock_irqsave_unlock(&page_lock);
+
+	return ret;
+}
+
 int page_unmap(size_t viraddr, size_t npages)
 {
 	if (BUILTIN_EXPECT(!npages, 0))
@@ -192,6 +279,20 @@ int page_unmap(size_t viraddr, size_t npages)
 
 	/* This can't fail because we don't make checks here */
 	return 0;
+}
+
+int page_unmap_2m(size_t viraddr) {
+    spinlock_irqsave_lock(&page_lock);
+
+    size_t vpn = viraddr>>PAGE_2M_BITS;
+    self[1][vpn] = 0;
+    tlb_flush_one_page(vpn >> PAGE_2M_BITS, 0);
+
+    ipi_tlb_flush();
+
+    spinlock_irqsave_unlock(&page_lock);
+
+    return 0;
 }
 
 int check_pagetables(size_t vaddr)
@@ -226,8 +327,7 @@ void page_fault_handler(struct state *s)
 
 	spinlock_irqsave_lock(&page_lock);
 
-	if (((task->heap) && (viraddr >= task->heap->start) && (viraddr < task->heap->end))
-	   || ((viraddr >= (size_t) &__bss_start) && (viraddr < (size_t) &kernel_start + image_size))) {
+	if ((task->heap) && (viraddr >= task->heap->start) && (viraddr < task->heap->end)) {
 		size_t flags;
 		int ret;
 
@@ -287,6 +387,7 @@ void page_fault_handler(struct state *s)
 			pfault_hcall_arg.type = PFAULT_HEAP;
 			pfault_hcall_arg.npages = batch_pages;
 			pfault_hcall_arg.success = 0;
+			pfault_hcall_arg.page_size = PAGE_SIZE;
 
 			uhyve_send(UHYVE_PORT_PFAULT,
 					(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
@@ -294,6 +395,63 @@ void page_fault_handler(struct state *s)
 			if(!pfault_hcall_arg.success)
 				goto default_handler;
 		}
+
+		spinlock_irqsave_unlock(&page_lock);
+		// clear cr2 to signalize that the pagefault is solved by the pagefault handler
+		write_cr2(0);
+
+		return;
+	}
+	else if ((viraddr >= (size_t) &__bss_start) && (viraddr < (size_t) &kernel_start + image_size)) {
+		size_t flags;
+		int ret;
+
+		/*
+		 * do we have a valid page table entry? => flush TLB and return
+		 */
+		if (check_pagetables(viraddr)) {
+			//tlb_flush_one_page(viraddr, 0);
+			spinlock_irqsave_unlock(&page_lock);
+
+
+			return;
+		}
+
+		// on demand userspace bss mapping
+		viraddr &= HUGE_PAGE_MASK;
+
+		size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_huge_page();
+		if (BUILTIN_EXPECT(!phyaddr, 0)) {
+			LOG_ERROR("out of memory: task = %u\n", task->id);
+			goto default_handler;
+		}
+
+		flags = PG_USER|PG_RW;
+		if (has_nx()) // set no execution flag to protect the heap
+			flags |= PG_XD;
+		ret = __page_map_2m(viraddr, phyaddr, HUGE_PAGE_SIZE/PAGE_SIZE, flags, 0);
+
+		if (BUILTIN_EXPECT(ret, 0)) {
+			LOG_ERROR("map_region: could not map %#lx to %#lx, task = %u\n", phyaddr, viraddr, task->id);
+			put_page(phyaddr);
+
+			goto default_handler;
+		}
+
+                /* Call uhyve to populate the page */
+                pfault_hcall_arg.rip = s->rip;
+                pfault_hcall_arg.vaddr = viraddr;
+                pfault_hcall_arg.paddr = phyaddr;
+                pfault_hcall_arg.type = PFAULT_BSS;
+                pfault_hcall_arg.npages = 1;
+                pfault_hcall_arg.success = 0;
+		pfault_hcall_arg.page_size = HUGE_PAGE_SIZE;
+
+                uhyve_send(UHYVE_PORT_PFAULT,
+                		(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));
+
+                if(!pfault_hcall_arg.success)
+                	goto default_handler;
 
 		spinlock_irqsave_unlock(&page_lock);
 		// clear cr2 to signalize that the pagefault is solved by the pagefault handler

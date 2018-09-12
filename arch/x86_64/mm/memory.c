@@ -118,7 +118,92 @@ out:
 	return ret;
 }
 
+static size_t __get_pages(size_t npages, size_t align)
+{
+	size_t i, ret = 0;
+	free_list_t* curr = free_start;
+
+	if (BUILTIN_EXPECT(!npages, 0))
+		return 0;
+	if (BUILTIN_EXPECT(npages > atomic_int64_read(&total_available_pages), 0))
+		return 0;
+
+	spinlock_irqsave_lock(&list_lock);
+
+	while(curr) {
+		i = (curr->end - curr->start) / PAGE_SIZE;
+		if (i > npages) {
+			if (!(curr->start & (align-1)))	 {
+				ret = curr->start;
+				curr->start += npages * PAGE_SIZE;
+				goto out;
+			} else {
+				size_t tmp = HUGE_PAGE_CEIL(curr->start);
+				if (tmp < curr->end) {
+					// Ok, we have to split the list
+					free_list_t* n = kmalloc(sizeof(free_list_t));
+					if (n) {
+						n->start = tmp;
+						n->end = curr->end;
+						curr->end = n->start;
+						n->prev = curr;
+						n->next = curr->next;
+						curr->next = n;
+					}
+				}
+			}
+		} else if ((i == npages) && !(curr->start & (align-1))) {
+			ret = curr->start;
+			if (curr->prev) {
+				if (curr->next)
+					curr->next->prev = curr->prev;
+				curr->prev->next = curr->next;
+			} else {
+				free_start = curr->next;
+				free_start->prev = NULL;
+			}
+			if (curr != &init_list)
+				kfree(curr);
+			goto out;
+		}
+
+		curr = curr->next;
+	}
+out:
+	LOG_DEBUG("get_pages: ret 0%llx, curr->start 0x%llx, curr->end 0x%llx\n", ret, curr->start, curr->end);
+
+	spinlock_irqsave_unlock(&list_lock);
+
+	if (ret) {
+		atomic_int64_add(&total_allocated_pages, npages);
+		atomic_int64_sub(&total_available_pages, npages);
+	}
+
+	return ret;
+}
+
+size_t get_huge_page(void)
+{
+	return __get_pages(HUGE_PAGE_SIZE/PAGE_SIZE, HUGE_PAGE_SIZE);
+}
+
 DEFINE_PER_CORE(size_t, ztmp_addr, 0);
+
+static inline size_t get_ztmp_addr(void)
+{
+        size_t viraddr = per_core(ztmp_addr);
+        if (BUILTIN_EXPECT(!viraddr, 0))
+        {
+                viraddr = vma_alloc(PAGE_SIZE, VMA_READ|VMA_WRITE|VMA_CACHEABLE);
+                if (BUILTIN_EXPECT(!viraddr, 0))
+                        return 0;
+
+                LOG_DEBUG("Core %d uses 0x%zx as temporary address\n", CORE_ID, viraddr);
+                set_per_core(ztmp_addr, viraddr);
+        }
+
+        return viraddr;
+}
 
 size_t get_zeroed_page(void)
 {
@@ -150,6 +235,28 @@ novaddr:
 	irq_nested_enable(flags);
 
 	return phyaddr;
+}
+
+size_t get_zeroed_huge_page(void)
+{
+        size_t phyaddr = get_huge_page();
+
+        if (BUILTIN_EXPECT(!phyaddr, 0))
+                return 0;
+
+        uint8_t flags = irq_nested_disable();
+
+        size_t viraddr = get_ztmp_addr(); 
+        if (!viraddr) {
+                for(uint32_t i=0; i<HUGE_PAGE_SIZE/PAGE_SIZE; i++) {
+                        __page_map(viraddr, phyaddr+i*PAGE_SIZE, 1, PG_GLOBAL|PG_RW|PG_PRESENT, 0);
+                        memset((void*) viraddr, 0x00, PAGE_SIZE);
+                }
+        }
+
+        irq_nested_enable(flags);
+
+        return phyaddr;
 }
 
 /* TODO: reunion of elements is still missing */
