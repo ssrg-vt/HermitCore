@@ -34,6 +34,7 @@
 #include <hermit/spinlock.h>
 #include <hermit/memory.h>
 #include <hermit/logging.h>
+#include <hermit/memory-usage.h>
 #include <asm/page.h>
 
 /// A linked list for each binary size exponent
@@ -198,6 +199,9 @@ void* create_stack(size_t sz)
 		return NULL;
 	}
 
+	/* Update memory consumption */
+	memory_usage_add(sz);
+
 	return (void*) (viraddr+PAGE_SIZE);
 }
 
@@ -221,6 +225,9 @@ int destroy_stack(void* viraddr, size_t sz)
 	vma_free((size_t)viraddr-PAGE_SIZE, (size_t)viraddr+(npages+1)*PAGE_SIZE);
 	page_unmap((size_t)viraddr, npages);
 	put_pages(phyaddr, npages);
+
+	/* Update memory consumption */
+	memory_usage_sub(sz);
 
 	return 0;
 }
