@@ -114,7 +114,6 @@ static int restore_data(uint64_t data_size) {
 static int restore_bss(uint64_t bss_size) {
 	MIGLOG("Restore bss from 0x%llx, size 0x%llx\n", (size_t)&__bss_start,
 			bss_size);
-	/* TODO: on-demand migration */
 	if(full_chkpt_restore)
 		return migrate_restore_area(CHKPT_BSS_FILE, (size_t)&__bss_start, bss_size);
 	else {

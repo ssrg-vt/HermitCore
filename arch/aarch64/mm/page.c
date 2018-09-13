@@ -295,26 +295,41 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		return 0;
 	}
 	else if ((viraddr >= (size_t) &__bss_start) && (viraddr < (size_t) &kernel_start + image_size)) {
+		/* When allocating in batch, do no go past the heap end */
+		int batch_pages = BATCH_PAGES;
+		while(viraddr + batch_pages*PAGE_SIZE 
+			> ((size_t)&kernel_start + image_size)) batch_pages--;
+		if(!batch_pages) batch_pages = 1;
+
 		/*
 		 * do we have a valid page table entry? => flush TLB and return
 		 */
-		if (check_pagetables(viraddr)) {
-			tlb_flush_one_page(viraddr);
-			spinlock_irqsave_unlock(&page_lock);
-			return 0;
+		for(int i=0; i<batch_pages; i++) {
+			uint64_t addr = viraddr + i*PAGE_SIZE;
+			if (check_pagetables(addr)) {
+				if(addr == viraddr) {
+					tlb_flush_one_page(addr);
+					spinlock_irqsave_unlock(&page_lock);
+					return 0;
+				} else {
+					batch_pages = 1;
+					break;
+				}
+			}
 		}
 
 		 // on demand userspace bss mapping
 		viraddr &= PAGE_MASK;
 
-		size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
+		//size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
+		size_t phyaddr = get_pages(batch_pages);
 		if (BUILTIN_EXPECT(!phyaddr, 0)) {
 			LOG_ERROR("out of memory: task = %u\n", task->id);
 			goto default_handler;
 		}
 
 		size_t flags = PG_USER|PG_RW;
-		int ret = __page_map(viraddr, phyaddr, 1, flags);
+		int ret = __page_map(viraddr, phyaddr, batch_pages, flags);
 
 		if (BUILTIN_EXPECT(ret, 0)) {
 			LOG_ERROR("map_region: could not map %#lx to %#lx, task = %u\n", phyaddr, viraddr, task->id);
@@ -328,7 +343,7 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		pfault_hcall_arg.paddr = phyaddr;
 		pfault_hcall_arg.vaddr = viraddr;
 		pfault_hcall_arg.type = PFAULT_BSS;
-		pfault_hcall_arg.npages = 1;
+		pfault_hcall_arg.npages = batch_pages;
 		pfault_hcall_arg.success = 0;
 		pfault_hcall_arg.page_size = PAGE_SIZE;
 
