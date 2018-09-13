@@ -187,6 +187,12 @@ size_t get_huge_page(void)
 	return __get_pages(HUGE_PAGE_SIZE/PAGE_SIZE, HUGE_PAGE_SIZE);
 }
 
+size_t get_huge_pages(int npages)
+{
+	return __get_pages(npages*HUGE_PAGE_SIZE/PAGE_SIZE, HUGE_PAGE_SIZE);
+}
+
+
 DEFINE_PER_CORE(size_t, ztmp_addr, 0);
 
 static inline size_t get_ztmp_addr(void)
