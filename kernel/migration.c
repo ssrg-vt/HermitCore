@@ -11,6 +11,7 @@
 #include <hermit/errno.h>
 #include <hermit/stdio.h>
 #include <hermit/tasks.h>
+#include <hermit/memory-usage.h>
 
 #ifdef __aarch64__
 #include <hermit/migration-aarch64-regs.h>
@@ -174,6 +175,9 @@ static int restore_heap(uint64_t heap_start, uint64_t heap_size) {
 		MIGERR("Cannot reallocate heap, out of memory\n");
 		return -1;
 	}
+
+	/* Keep track of memory usage */
+	memory_usage_add(heap_size);
 
 	/* Fully restore the heap if we are doing checkpoint restart, otherwise it
 	 * will be brought on demand later */

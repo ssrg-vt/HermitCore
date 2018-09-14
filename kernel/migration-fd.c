@@ -8,6 +8,10 @@
 #define MIG_FD_ARRAY_SIZE	128
 #define MAX_FD_PATH_SIZE	128
 
+/* FIXME for now we do not support more than 32 files (cannot use kmalloc yet
+ * as the memory subsystem is not fully initialized) */
+#define MAX_FILES_SUPPORTED	32
+
 /* Moved this here from fcntl.h */
 #define O_RDONLY	0x000
 #define O_WRONLY	0x001
@@ -27,8 +31,8 @@ typedef struct {
 	char path[MAX_FD_PATH_SIZE];
 } migration_fd_t;
 
-migration_fd_t fd_array[MIG_FD_ARRAY_SIZE];
-spinlock_irqsave_t fd_array_lock = SPINLOCK_IRQSAVE_INIT;
+static migration_fd_t fd_array[MIG_FD_ARRAY_SIZE];
+static spinlock_irqsave_t fd_array_lock = SPINLOCK_IRQSAVE_INIT;
 
 static void print_migration_array(void);
 
@@ -42,9 +46,9 @@ void migration_fd_init() {
 		fd_array[i].app_fd = fd_array[i].real_fd = -1;
 }
 
+migration_fd_t local_fd_array[MAX_FILES_SUPPORTED];
 int migrate_restore_fds(const char *filename) {
 	int fd, i, filesize, nelems;
-	migration_fd_t *local_fd_array;
 
 	fd = sys_open(filename, O_RDONLY, 0x0);
 
@@ -73,13 +77,10 @@ int migrate_restore_fds(const char *filename) {
 		return 0;
 	}
 
-	local_fd_array = kmalloc(nelems * sizeof(migration_fd_t));
-	if(!local_fd_array) {
-		MIGERR("FD migration: cannot allocate memory\n");
-		return -ENOMEM;
-	}
+	if(nelems > MAX_FILES_SUPPORTED)
+		MIGERR("Too much files to restore\n");
 
-	if(sys_read(fd, (char *)local_fd_array, nelems*sizeof(migration_fd_t)) !=
+	if(sys_read(fd, (char *)&(local_fd_array)[0], nelems*sizeof(migration_fd_t)) !=
 			nelems*sizeof(migration_fd_t)) {
 		MIGERR("read error on restoring fds\n");
 		sys_close(fd);
@@ -128,7 +129,7 @@ int migrate_restore_fds(const char *filename) {
 
 int migrate_chkpt_fds(const char *filename) {
 	int i, fd;
-	
+
 	fd = sys_open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 	if(fd == -1) {
 		MIGERR("Cannot open file for fd migration\n");
@@ -149,7 +150,7 @@ int migrate_chkpt_fds(const char *filename) {
 			}
 			ptr->offset = offset;
 
-			if(sys_write(fd, (char *)ptr, sizeof(migration_fd_t)) != 
+			if(sys_write(fd, (char *)ptr, sizeof(migration_fd_t)) !=
 				sizeof(migration_fd_t)) {
 				MIGERR("Saving fd array: short write\n");
 				sys_close(fd);

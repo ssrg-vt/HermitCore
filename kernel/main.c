@@ -37,6 +37,7 @@
 #include <hermit/logging.h>
 #include <hermit/migration.h>
 #include <hermit/stack_slots.h>
+#include <hermit/memory-usage.h>
 #include <asm/irq.h>
 #include <asm/page.h>
 #include <asm/uart.h>
@@ -683,6 +684,9 @@ int hermit_main(void)
 	LOG_INFO("Core %d is the boot processor\n", boot_processor);
 	LOG_INFO("System is able to use %d processors\n", possible_cpus);
 	LOG_INFO("Popcorn node id is: %u\n", node_id);
+
+	/* memory consumption == static memory */
+	memory_usage_set(image_size);
 
 	if (get_cmdline())
 		LOG_INFO("Kernel cmdline: %s\n", get_cmdline());

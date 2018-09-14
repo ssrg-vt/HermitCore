@@ -42,6 +42,7 @@
 #include <sys/poll.h>
 #include <hermit/migration-fd.h>
 #include <hermit/umalloc.h>
+#include <hermit/memory-usage.h>
 
 #include <lwip/sockets.h>
 #include <lwip/err.h>
@@ -408,6 +409,8 @@ ssize_t sys_sbrk(ssize_t incr)
 
 		// reserve VMA regions
 		if (PAGE_FLOOR(heap->end) > PAGE_FLOOR(ret)) {
+			/* Keep track of memory consumption */
+			memory_usage_add(PAGE_FLOOR(heap->end) - PAGE_FLOOR(ret));
 			// region is already reserved for the heap, we have to change the
 			// property
 			vma_free(PAGE_FLOOR(ret), PAGE_CEIL(heap->end));
@@ -541,6 +544,8 @@ int sys_close(int fd)
 	if (is_uhyve()) {
 		uhyve_close_t uhyve_close = {fd, -1};
 
+		if(fd > 2)
+			uhyve_close.fd = get_real_fd(fd);
 		uhyve_send(UHYVE_PORT_CLOSE, (unsigned)virt_to_phys((size_t) &uhyve_close));
 
 		if(fd > 2 && migration_fd_del(fd)) {
