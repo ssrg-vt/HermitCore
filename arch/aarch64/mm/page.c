@@ -50,6 +50,8 @@
  * allocated for maintaining a value, rather their address is their value. */
 extern const void kernel_start;
 extern const void __bss_start;
+extern const void __data_start;
+extern const void __data_end;
 
 extern size_t l0_pgtable;
 
@@ -294,11 +296,26 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		spinlock_irqsave_unlock(&page_lock);
 		return 0;
 	}
-	else if ((viraddr >= (size_t) &__bss_start) && (viraddr < (size_t) &kernel_start + image_size)) {
+	else if (((viraddr >= (size_t) &__bss_start) 
+			&& (viraddr < (size_t) &kernel_start + image_size))
+				|| ((viraddr >= (size_t) &__data_start) 
+					&& (viraddr < (size_t) &__data_end))) {
+		size_t end;
+
+		if((viraddr >= (size_t) &__bss_start) 
+			&& (viraddr < (size_t) &kernel_start + image_size)){
+			
+			end = (size_t) &kernel_start + image_size;
+			pfault_hcall_arg.type = PFAULT_BSS;
+		}
+		else {
+			end = (size_t) &__data_end;
+			pfault_hcall_arg.type = PFAULT_DATA;
+		}
+
 		/* When allocating in batch, do no go past the heap end */
 		int batch_pages = BATCH_PAGES;
-		while(viraddr + batch_pages*PAGE_SIZE 
-			> ((size_t)&kernel_start + image_size)) batch_pages--;
+		while(viraddr + batch_pages*PAGE_SIZE > end) batch_pages--;
 		if(!batch_pages) batch_pages = 1;
 
 		/*
@@ -342,7 +359,6 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		pfault_hcall_arg.rip = pc;
 		pfault_hcall_arg.paddr = phyaddr;
 		pfault_hcall_arg.vaddr = viraddr;
-		pfault_hcall_arg.type = PFAULT_BSS;
 		pfault_hcall_arg.npages = batch_pages;
 		pfault_hcall_arg.success = 0;
 		pfault_hcall_arg.page_size = PAGE_SIZE;

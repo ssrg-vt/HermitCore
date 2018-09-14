@@ -40,7 +40,8 @@
 typedef enum {
        PFAULT_FATAL = 0,
        PFAULT_HEAP,
-       PFAULT_BSS
+       PFAULT_BSS,
+       PFAULT_DATA
 } pfault_type_t;
 
 /* How much pages we bring at once from remote memory */

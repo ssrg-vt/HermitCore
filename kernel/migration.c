@@ -38,6 +38,7 @@
 typedef struct {
 	uint64_t heap_size;
 	uint64_t bss_size;
+	uint64_t data_size;
 } __attribute__ ((packed)) uhyve_migration_t;
 
 /* atomic variable set to 1 when application should migrate */
@@ -105,10 +106,22 @@ static int restore_data(uint64_t data_size) {
 	MIGLOG("Restore data from 0x%llx, size 0x%llx\n", (size_t)&__data_start,
 			data_size);
 
-	/* TODO: on-demand migration */
-
-	return migrate_restore_area(CHKPT_DATA_FILE, (size_t)&__data_start,
-		data_size);
+	if(full_chkpt_restore)
+		return migrate_restore_area(CHKPT_DATA_FILE, 
+			(size_t)&__data_start, data_size);
+	else {
+#ifdef __aarch64__
+		page_unmap((size_t)&__data_start, data_size/PAGE_SIZE);
+#else
+		for(size_t i = (size_t)&__data_start; i < ((size_t)&__data_start 
+					+ (size_t)data_size); i = i + HUGE_PAGE_SIZE)
+		{
+			MIGLOG("Unmapping data\n");
+			page_unmap_2m(i);
+		}
+#endif
+		return 0;
+	}
 }
 
 static int restore_bss(uint64_t bss_size) {
@@ -521,12 +534,15 @@ migrate_resume_entry_point:
 
 	/* Save .data */
 	data_size = (size_t) &__data_end - (size_t) &__data_start;
-	MIGLOG("Checkpoint data from 0x%llx, size 0x%llx\n", &__data_start,
-			data_size);
-	if(migrate_chkpt_area(((uint64_t)&__data_start), data_size,
-				CHKPT_DATA_FILE))
-		return -1;
 	md.data_size = data_size;
+
+	if(full_chkpt_save){
+		MIGLOG("Checkpoint data from 0x%llx, size 0x%llx\n", &__data_start,
+			data_size);
+		if(migrate_chkpt_area(((uint64_t)&__data_start), data_size,
+				CHKPT_DATA_FILE))
+			return -1;
+	}
 
 	/* Save tls size (same for all the threads) */
 	md.tls_size = task->tls_size;
@@ -605,7 +621,7 @@ migrate_resume_entry_point:
 
 	/* Finally the main task sends the migration signal to uhyve */
 	MIGLOG("Thread %d (primary) done with migration\n", task->id);
-	uhyve_migration_t arg = {md.heap_size, md.bss_size};
+	uhyve_migration_t arg = {md.heap_size, md.bss_size, md.data_size};
 	uhyve_send(UHYVE_PORT_MIGRATE, (unsigned)virt_to_phys((size_t)&arg));
 
 	/* Should never reach here */
