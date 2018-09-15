@@ -115,8 +115,7 @@ static int restore_data(uint64_t data_size) {
 		page_unmap((size_t)&__data_start, data_size/PAGE_SIZE);
 #else
 		for(size_t i = (size_t)&__data_start; i < ((size_t)&__data_start 
-					+ (size_t)data_size); i = i + HUGE_PAGE_SIZE)
-		{
+					+ (size_t)data_size); i = i + HUGE_PAGE_SIZE){
 			MIGLOG("Unmapping data\n");
 			page_unmap_2m(i);
 		}
