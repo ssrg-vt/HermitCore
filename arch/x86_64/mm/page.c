@@ -403,16 +403,15 @@ void page_fault_handler(struct state *s)
 		write_cr2(0);
 
 		return;
-	}
-	else if (((viraddr >= (size_t) &__bss_start) && (viraddr 
-			< (size_t) &kernel_start + image_size)) 
-				|| (viraddr >= (size_t)&__data_start && 
+
+	} else if (((viraddr >= (size_t) &__bss_start) && (viraddr
+			< (size_t) &kernel_start + image_size))
+				|| (viraddr >= (size_t)&__data_start &&
 					viraddr < (size_t)&__data_end)) {
 		size_t flags;
 		int ret;
 		size_t end;
 
-		LOG_INFO("page fault received\n");
 		if(viraddr >= (size_t)&__data_start && viraddr < (size_t)&__data_end){
 			end = (size_t)&__data_end;
 			pfault_hcall_arg.type = PFAULT_DATA;
@@ -447,7 +446,6 @@ void page_fault_handler(struct state *s)
 		// on demand userspace bss mapping
 		viraddr &= HUGE_PAGE_MASK;
 
-		//size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_huge_page();
 		size_t phyaddr = get_huge_pages(batch_pages);
 		if (BUILTIN_EXPECT(!phyaddr, 0)) {
 			LOG_ERROR("out of memory: task = %u\n", task->id);
@@ -472,7 +470,7 @@ void page_fault_handler(struct state *s)
                 pfault_hcall_arg.paddr = phyaddr;
                 pfault_hcall_arg.npages = batch_pages;
                 pfault_hcall_arg.success = 0;
-		pfault_hcall_arg.page_size = HUGE_PAGE_SIZE;
+				pfault_hcall_arg.page_size = HUGE_PAGE_SIZE;
 
                 uhyve_send(UHYVE_PORT_PFAULT,
                 		(unsigned)virt_to_phys((size_t)&pfault_hcall_arg));

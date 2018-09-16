@@ -90,7 +90,7 @@ size_t get_pages(size_t npages)
 			goto out;
 		} else if (i == npages) {
 			ret = curr->start;
-			if (curr->prev) { 
+			if (curr->prev) {
 				if (curr->next)
 					curr->next->prev = curr->prev;
 				curr->prev->next = curr->next;

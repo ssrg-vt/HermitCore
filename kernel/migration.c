@@ -108,17 +108,15 @@ static int restore_data(uint64_t data_size) {
 			data_size);
 
 	if(full_chkpt_restore)
-		return migrate_restore_area(CHKPT_DATA_FILE, 
+		return migrate_restore_area(CHKPT_DATA_FILE,
 			(size_t)&__data_start, data_size);
 	else {
 #ifdef __aarch64__
 		page_unmap((size_t)&__data_start, data_size/PAGE_SIZE);
 #else
-		for(size_t i = (size_t)&__data_start; i < ((size_t)&__data_start 
-					+ (size_t)data_size); i = i + HUGE_PAGE_SIZE){
-			MIGLOG("Unmapping data\n");
+		for(size_t i = (size_t)&__data_start; i < ((size_t)&__data_start
+					+ (size_t)data_size); i += HUGE_PAGE_SIZE)
 			page_unmap_2m(i);
-		}
 #endif
 		return 0;
 	}
@@ -133,8 +131,8 @@ static int restore_bss(uint64_t bss_size) {
 #ifdef __aarch64__
 		page_unmap((size_t)&__bss_start, bss_size/PAGE_SIZE);
 #else
-		for(size_t i = (size_t)&__bss_start; i < ((size_t)&__bss_start 
-					+ (size_t)bss_size); i = i + HUGE_PAGE_SIZE)
+		for(size_t i = (size_t)&__bss_start; i < ((size_t)&__bss_start
+					+ (size_t)bss_size); i += HUGE_PAGE_SIZE)
 			page_unmap_2m(i);
 #endif
 		return 0;
@@ -528,8 +526,7 @@ migrate_resume_entry_point:
 	/* Save .bss */
 	bss_size = (size_t) &kernel_start + image_size - (size_t) &__bss_start;
 	md.bss_size = bss_size;
-
-	if(full_chkpt_save){
+	if(full_chkpt_save) {
 		MIGLOG("Checkpoint bss from 0x%llx, size 0x%llx\n", &__bss_start, bss_size);
 		if(migrate_chkpt_area(((uint64_t)&__bss_start), bss_size, CHKPT_BSS_FILE))
 			return -1;
@@ -538,8 +535,7 @@ migrate_resume_entry_point:
 	/* Save .data */
 	data_size = (size_t) &__data_end - (size_t) &__data_start;
 	md.data_size = data_size;
-
-	if(full_chkpt_save){
+	if(full_chkpt_save) {
 		MIGLOG("Checkpoint data from 0x%llx, size 0x%llx\n", &__data_start,
 			data_size);
 		if(migrate_chkpt_area(((uint64_t)&__data_start), data_size,

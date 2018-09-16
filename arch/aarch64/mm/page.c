@@ -296,19 +296,17 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		spinlock_irqsave_unlock(&page_lock);
 		return 0;
 	}
-	else if (((viraddr >= (size_t) &__bss_start) 
+	else if (((viraddr >= (size_t) &__bss_start)
 			&& (viraddr < (size_t) &kernel_start + image_size))
-				|| ((viraddr >= (size_t) &__data_start) 
+				|| ((viraddr >= (size_t) &__data_start)
 					&& (viraddr < (size_t) &__data_end))) {
 		size_t end;
 
-		if((viraddr >= (size_t) &__bss_start) 
-			&& (viraddr < (size_t) &kernel_start + image_size)){
-			
+		if((viraddr >= (size_t) &__bss_start)
+			&& (viraddr < (size_t) &kernel_start + image_size)) {
 			end = (size_t) &kernel_start + image_size;
 			pfault_hcall_arg.type = PFAULT_BSS;
-		}
-		else {
+		} else {
 			end = (size_t) &__data_end;
 			pfault_hcall_arg.type = PFAULT_DATA;
 		}
@@ -338,7 +336,6 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		 // on demand userspace bss mapping
 		viraddr &= PAGE_MASK;
 
-		//size_t phyaddr = expect_zeroed_pages ? get_zeroed_page() : get_page();
 		size_t phyaddr = get_pages(batch_pages);
 		if (BUILTIN_EXPECT(!phyaddr, 0)) {
 			LOG_ERROR("out of memory: task = %u\n", task->id);
