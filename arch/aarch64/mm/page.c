@@ -246,7 +246,7 @@ int page_fault_handler(size_t viraddr, size_t pc)
 					spinlock_irqsave_unlock(&page_lock);
 					return 0;
 				} else {
-					batch_pages = 1;
+					batch_pages -= (batch_pages - i);
 					break;
 				}
 			}
@@ -304,10 +304,10 @@ int page_fault_handler(size_t viraddr, size_t pc)
 
 		if((viraddr >= (size_t) &__bss_start)
 			&& (viraddr < (size_t) &kernel_start + image_size)) {
-			end = (size_t) &kernel_start + image_size;
+			end = PAGE_CEIL((size_t) &kernel_start + image_size);
 			pfault_hcall_arg.type = PFAULT_BSS;
 		} else {
-			end = (size_t) &__data_end;
+			end = PAGE_CEIL((size_t) &__data_end);
 			pfault_hcall_arg.type = PFAULT_DATA;
 		}
 
@@ -316,6 +316,7 @@ int page_fault_handler(size_t viraddr, size_t pc)
 		while(viraddr + batch_pages*PAGE_SIZE > end) batch_pages--;
 		if(!batch_pages) batch_pages = 1;
 
+#if 1
 		/*
 		 * do we have a valid page table entry? => flush TLB and return
 		 */
@@ -327,11 +328,12 @@ int page_fault_handler(size_t viraddr, size_t pc)
 					spinlock_irqsave_unlock(&page_lock);
 					return 0;
 				} else {
-					batch_pages = 1;
+					batch_pages -= (batch_pages - i);
 					break;
 				}
 			}
 		}
+#endif
 
 		 // on demand userspace bss mapping
 		viraddr &= PAGE_MASK;

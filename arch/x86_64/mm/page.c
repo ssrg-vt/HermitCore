@@ -349,7 +349,7 @@ void page_fault_handler(struct state *s)
 					spinlock_irqsave_unlock(&page_lock);
 					return;
 				} else {
-					batch_pages = 1;
+					batch_pages -= (batch_pages - i);
 					break;
 				}
 			}
@@ -413,19 +413,22 @@ void page_fault_handler(struct state *s)
 		size_t end;
 
 		if(viraddr >= (size_t)&__data_start && viraddr < (size_t)&__data_end){
-			end = (size_t)&__data_end;
+			end = HUGE_PAGE_CEIL((size_t)&__data_end);
 			pfault_hcall_arg.type = PFAULT_DATA;
 		}
 		else {
-			end = (size_t)&kernel_start + image_size;
+			end = HUGE_PAGE_CEIL((size_t)&kernel_start + image_size);
 			pfault_hcall_arg.type = PFAULT_BSS;
 		}
 
-		/* When allocating in batch, do no go past the heap end */
-		int batch_pages = BATCH_PAGES;
+		/* When allocating in batch, do no go past the heap end. For now we
+		 * do not batch from x86 as pages are already 2MB which is largei enough
+		 * (512 4K pages) */
+		int batch_pages = 1;
 		while(viraddr + batch_pages*HUGE_PAGE_SIZE > end) batch_pages--;
 		if(!batch_pages) batch_pages = 1;
 
+#if 1
 		/*
 		 * do we have a valid page table entry? => flush TLB and return
 		 */
@@ -437,11 +440,12 @@ void page_fault_handler(struct state *s)
 					spinlock_irqsave_unlock(&page_lock);
 					return;
 				} else {
-					batch_pages = 1;
+					batch_pages = (batch_pages - i);
 					break;
 				}
 			}
 		}
+#endif
 
 		// on demand userspace bss mapping
 		viraddr &= HUGE_PAGE_MASK;

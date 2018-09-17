@@ -42,6 +42,13 @@ typedef struct {
 	uint64_t data_size;
 } __attribute__ ((packed)) uhyve_migration_t;
 
+/* Used to initialize the client host size of the remote memory system */
+typedef struct {
+	uint64_t heap_size;
+	uint64_t bss_size;
+	uint64_t data_size;
+} __attribute__ ((packed)) uhyve_init_rmem_t;
+
 /* atomic variable set to 1 when application should migrate */
 extern atomic_int32_t should_migrate;
 
@@ -112,10 +119,10 @@ static int restore_data(uint64_t data_size) {
 			(size_t)&__data_start, data_size);
 	else {
 #ifdef __aarch64__
-		page_unmap((size_t)&__data_start, data_size/PAGE_SIZE);
+		page_unmap((size_t)&__data_start, PAGE_CEIL(data_size)/PAGE_SIZE);
 #else
 		for(size_t i = (size_t)&__data_start; i < ((size_t)&__data_start
-					+ (size_t)data_size); i += HUGE_PAGE_SIZE)
+					+ (size_t)PAGE_2M_CEIL(data_size)); i += HUGE_PAGE_SIZE)
 			page_unmap_2m(i);
 #endif
 		return 0;
@@ -129,10 +136,10 @@ static int restore_bss(uint64_t bss_size) {
 		return migrate_restore_area(CHKPT_BSS_FILE, (size_t)&__bss_start, bss_size);
 	else {
 #ifdef __aarch64__
-		page_unmap((size_t)&__bss_start, bss_size/PAGE_SIZE);
+		page_unmap((size_t)&__bss_start, PAGE_CEIL(bss_size)/PAGE_SIZE);
 #else
 		for(size_t i = (size_t)&__bss_start; i < ((size_t)&__bss_start
-					+ (size_t)bss_size); i += HUGE_PAGE_SIZE)
+					+ (size_t)PAGE_2M_CEIL(bss_size)); i += HUGE_PAGE_SIZE)
 			page_unmap_2m(i);
 #endif
 		return 0;
@@ -268,9 +275,10 @@ int save_tls(uint64_t tls_size, int task_id) {
 /* A dedicated thread calls this function. This function reads the heap page by
  * page. If any page is absent, a page fault occures which retrives the page
  * from the source machine. It helps prefetching heap after migration.
+ * TODO: BSS and DATA
  */
 #define REMOTE_MEM_THREAD_DELAY_MS	200
-#define VALID_ADDRESSES_TO_TRY		16
+#define VALID_ADDRESSES_TO_TRY		1024
 int periodic_page_access(void *arg)
 {
 	uint64_t i;
@@ -291,21 +299,61 @@ int periodic_page_access(void *arg)
 	 * it is, check the next one, up to VALID_ADDRESSES_TO_TRY pages per
 	 * iteration */
 	for(i = start; i<stop; i += PAGE_SIZE) {
-		// MIGLOG("periodic: request 0x%llx\n", i);
 		if(check_pagetables(i)) {
 			if(++valid_addreses_found == VALID_ADDRESSES_TO_TRY) {
-				goto rmem_sleep;
+				goto rmem_sleep_heap;
 			} else { continue; }}
 
+		 //MIGLOG("periodic heap: request 0x%llx\n", i);
 		j = *((char *)i);
 
-rmem_sleep:
+rmem_sleep_heap:
+		valid_addreses_found = 0;
+		sys_msleep(REMOTE_MEM_THREAD_DELAY_MS);
+	}
+
+	/* BSS */
+	start = (uint64_t)&__bss_start;
+	stop = PAGE_CEIL((uint64_t)&__bss_start+md.bss_size);
+	valid_addreses_found = 0;
+	for(i = start; i<stop; i += PAGE_SIZE) {
+		if(check_pagetables(i)) {
+			if(++valid_addreses_found == VALID_ADDRESSES_TO_TRY) {
+				goto rmem_sleep_bss;
+			} else { continue; }}
+
+		 //MIGLOG("periodic data: request 0x%llx\n", i);
+		j = *((char *)i);
+
+rmem_sleep_bss:
+		valid_addreses_found = 0;
+		sys_msleep(REMOTE_MEM_THREAD_DELAY_MS);
+	}
+
+	/* DATA */
+	start = (uint64_t)&__data_start;
+	stop = PAGE_CEIL((uint64_t)&__data_start+md.data_size);
+	valid_addreses_found = 0;
+	for(i = start; i<stop; i += PAGE_SIZE) {
+		if(check_pagetables(i)) {
+			if(++valid_addreses_found == VALID_ADDRESSES_TO_TRY) {
+				goto rmem_sleep_data;
+			} else { continue; }}
+
+		 //MIGLOG("periodic data: request 0x%llx\n", i);
+		j = *((char *)i);
+
+rmem_sleep_data:
 		valid_addreses_found = 0;
 		sys_msleep(REMOTE_MEM_THREAD_DELAY_MS);
 	}
 
 	MIGLOG("Remote memory thread done\n");
 	return 0;
+}
+
+int proactive_remote_pull(void) {
+
 }
 
 /* Returns -1 if migration attemp failed (on the source), 0 if we are back from
@@ -395,8 +443,45 @@ migrate_resume_entry_point:
 #endif
 			mig_resuming = 0;
 
-		/* Tell uhyve we are done with checkpoitn restoring */
+		if(!full_chkpt_restore) {
+			/* Pass to uhyve the sizes of remote memory areas (heap/data/bss) */
+			uhyve_init_rmem_t init_rmem_arg = {md.heap_size, md.bss_size,
+				md.data_size};
+			uhyve_send(UHYVE_PORT_INIT_RMEM,
+					virt_to_phys((size_t)&init_rmem_arg));
+		}
+
+		/* Tell uhyve we are done with checkpoint restoring */
 		uhyve_send(UHYVE_PORT_CHKPT_RESTORED, 0x0);
+
+		/* If data/heap/bss is small enough, let's just get it now */
+		if(md.bss_size < PAGE_SIZE*30)  {
+			MIGLOG("Proactively pulling bss (Size: 0x%llx)\n", md.bss_size);
+			volatile int x;
+			for(uint64_t y = (uint64_t)&__bss_start;
+					y<((uint64_t)&__bss_start+md.bss_size);	y += PAGE_SIZE)
+				x = *((char *)y);
+			x = *(int *)(&__bss_start+md.bss_size - 1);
+		}
+
+		if(md.data_size < PAGE_SIZE*30)  {
+			MIGLOG("Proactively pulling data (size 0x%llx)\n", md.data_size);
+			volatile int x;
+			for(uint64_t y = (uint64_t)&__data_start;
+					y<((uint64_t)&__data_start+md.data_size); y += PAGE_SIZE)
+				x = *((char *)y);
+			x = *(int *)(&__data_start+md.data_size - 1);
+		}
+
+		if(md.heap_size < PAGE_SIZE*30)  {
+			MIGLOG("Proactively pulling heap (size 0x%llx)\n", md.heap_size);
+			uint64_t start = task->heap->start;
+			uint64_t stop = start + task->migrated_heap;
+			volatile int x;
+			for(uint64_t y = start;	y<stop; y += PAGE_SIZE)
+				x = *((char *)y);
+			x = *(int *)(stop - sizeof(int));
+		}
 
 #ifdef REMOTE_MEM_PULLING_THREAD
 		if(!full_chkpt_restore) {
@@ -406,7 +491,7 @@ migrate_resume_entry_point:
 
 			unsigned int created_remote_mem_thread_id;
 			clone_task(&created_remote_mem_thread_id, periodic_page_access,
-					NULL, LOW_PRIO);
+					NULL, HIGH_PRIO);
 			set_remote_mem_thread_id(created_remote_mem_thread_id);
 		}
 #endif
