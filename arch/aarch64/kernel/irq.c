@@ -238,9 +238,12 @@ int irq_post_init(void)
 		gicd_write(GICD_IPRIORITYR + i * 4, 0x80808080);
 	}
 
-	for (uint32_t i = 32/16; i < nr_irqs / 16; i++) {
-		gicd_write(GICD_NSACR + i * 4, 0xffffffff);
-	}
+	/* Pierre: this succeeds on the potato board but fails on the roc board
+	 * (triggering a trap to KVM with uhandled IO/MMIO). I noticed that when
+	 * disabled, things seem to still be working correctly on the potato. */
+//	for (uint32_t i = 32/16; i < nr_irqs / 16; i++) {
+//		gicd_write(GICD_NSACR + i * 4, 0xffffffff);
+//	}
 
 	for (uint32_t i = 32/32; i < nr_irqs / 32; i++) {
 		gicd_write(GICD_ICENABLER + i * 4, 0xffffffff);
