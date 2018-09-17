@@ -275,9 +275,8 @@ int save_tls(uint64_t tls_size, int task_id) {
 /* A dedicated thread calls this function. This function reads the heap page by
  * page. If any page is absent, a page fault occures which retrives the page
  * from the source machine. It helps prefetching heap after migration.
- * TODO: BSS and DATA
  */
-#define REMOTE_MEM_THREAD_DELAY_MS	200
+#define REMOTE_MEM_THREAD_DELAY_MS	300
 #define VALID_ADDRESSES_TO_TRY		1024
 int periodic_page_access(void *arg)
 {
