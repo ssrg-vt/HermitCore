@@ -351,8 +351,40 @@ rmem_sleep_data:
 	return 0;
 }
 
-int proactive_remote_pull(void) {
+/* Pull remote memory directly if it small */
+int proactive_remote_pull(uint64_t heap_size, uint64_t bss_size, uint64_t
+		data_size) {
+	task_t *task = per_core(current_task);
 
+	if(bss_size < PAGE_SIZE*30)  {
+		MIGLOG("Proactively pulling bss (Size: 0x%llx)\n", bss_size);
+		volatile int x;
+		for(uint64_t y = (uint64_t)&__bss_start;
+				y<((uint64_t)&__bss_start+bss_size);	y += PAGE_SIZE)
+			x = *((char *)y);
+		x = *(int *)(&__bss_start+bss_size - 1);
+	}
+
+	if(data_size < PAGE_SIZE*30)  {
+		MIGLOG("Proactively pulling data (size 0x%llx)\n", data_size);
+		volatile int x;
+		for(uint64_t y = (uint64_t)&__data_start;
+				y<((uint64_t)&__data_start+data_size); y += PAGE_SIZE)
+			x = *((char *)y);
+		x = *(int *)(&__data_start+data_size - 1);
+	}
+
+	if(heap_size < PAGE_SIZE*30)  {
+		MIGLOG("Proactively pulling heap (size 0x%llx)\n", heap_size);
+		uint64_t start = task->heap->start;
+		uint64_t stop = start + task->migrated_heap;
+		volatile int x;
+		for(uint64_t y = start;	y<stop; y += PAGE_SIZE)
+			x = *((char *)y);
+		x = *(int *)(stop - sizeof(int));
+	}
+
+	return 0;
 }
 
 /* Returns -1 if migration attemp failed (on the source), 0 if we are back from
@@ -454,33 +486,7 @@ migrate_resume_entry_point:
 		uhyve_send(UHYVE_PORT_CHKPT_RESTORED, 0x0);
 
 		/* If data/heap/bss is small enough, let's just get it now */
-		if(md.bss_size < PAGE_SIZE*30)  {
-			MIGLOG("Proactively pulling bss (Size: 0x%llx)\n", md.bss_size);
-			volatile int x;
-			for(uint64_t y = (uint64_t)&__bss_start;
-					y<((uint64_t)&__bss_start+md.bss_size);	y += PAGE_SIZE)
-				x = *((char *)y);
-			x = *(int *)(&__bss_start+md.bss_size - 1);
-		}
-
-		if(md.data_size < PAGE_SIZE*30)  {
-			MIGLOG("Proactively pulling data (size 0x%llx)\n", md.data_size);
-			volatile int x;
-			for(uint64_t y = (uint64_t)&__data_start;
-					y<((uint64_t)&__data_start+md.data_size); y += PAGE_SIZE)
-				x = *((char *)y);
-			x = *(int *)(&__data_start+md.data_size - 1);
-		}
-
-		if(md.heap_size < PAGE_SIZE*30)  {
-			MIGLOG("Proactively pulling heap (size 0x%llx)\n", md.heap_size);
-			uint64_t start = task->heap->start;
-			uint64_t stop = start + task->migrated_heap;
-			volatile int x;
-			for(uint64_t y = start;	y<stop; y += PAGE_SIZE)
-				x = *((char *)y);
-			x = *(int *)(stop - sizeof(int));
-		}
+		proactive_remote_pull(md.heap_size, md.bss_size, md.data_size);
 
 #ifdef REMOTE_MEM_PULLING_THREAD
 		if(!full_chkpt_restore) {
