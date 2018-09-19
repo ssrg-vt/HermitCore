@@ -486,7 +486,8 @@ migrate_resume_entry_point:
 		uhyve_send(UHYVE_PORT_CHKPT_RESTORED, 0x0);
 
 		/* If data/heap/bss is small enough, let's just get it now */
-		proactive_remote_pull(md.heap_size, md.bss_size, md.data_size);
+		if(!full_chkpt_restore)
+			proactive_remote_pull(md.heap_size, md.bss_size, md.data_size);
 
 #ifdef REMOTE_MEM_PULLING_THREAD
 		if(!full_chkpt_restore) {
