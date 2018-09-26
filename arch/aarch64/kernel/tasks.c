@@ -113,7 +113,6 @@ size_t* get_current_stack(void)
 	return curr_task->last_stack_pointer;
 }
 
-/* TODO: implement this for migration */
 int create_resume_frame(task_t* task, entry_point_t ep, void* arg, uint32_t
 		core_id, uint64_t stack_offset) {
 	char stack_chkpt_file[32];
